@@ -7,6 +7,15 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+# Default ports
+DEFAULT_PORT=80
+DEFAULT_SSL_PORT=443
+DEFAULT_XGT_PORT=4367
+DEFAULT_APP_PORT=3000
+
+# Minimum required Docker Compose version
+MIN_COMPOSE_VERSION="1.29.0"
+
 # Log functions
 log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
@@ -23,6 +32,24 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+# Function to check if a port is in use
+port_in_use() {
+    lsof -i :"$1" >/dev/null 2>&1
+}
+
+# Function to compare versions
+version_ge() {
+    [ "$(printf '%s\n' "$@" | sort -V | head -n 1)" = "$1" ]
+}
+
+# Read port values from .env file if it exists
+read_env_ports() {
+    if [ -f .env ]; then
+        log_info "Reading port values from .env file..."
+        export $(grep -E '^(MC_PORT|MC_SSL_PORT|MC_DEFAULT_XGT_PORT|APP_PORT)=' .env | xargs)
+    fi
+}
+
 # Check system requirements
 check_requirements() {
     log_info "Checking system requirements..."
@@ -34,10 +61,24 @@ check_requirements() {
         exit 1
     fi
 
+    # Check if Docker is running with a timeout
+    if ! timeout 10 docker version >/dev/null 2>&1; then
+        log_error "Docker is not running or not responding. Please start Docker first."
+        exit 1
+    fi
+
     # Check Docker Compose
     if ! command_exists docker compose && ! command_exists docker-compose; then
         log_error "Docker Compose is not installed. Please install Docker Compose first."
         log_info "Visit https://docs.docker.com/compose/install/ for installation instructions"
+        exit 1
+    fi
+
+    # Check Docker Compose version
+    compose_version=$(docker compose version --short 2>/dev/null || docker-compose --version | awk '{print $3}')
+    compose_version=$(echo "$compose_version" | sed 's/[^0-9.]*//g')
+    if ! version_ge "$MIN_COMPOSE_VERSION" "$compose_version"; then
+        log_error "Docker Compose version $compose_version is too old. Please install Docker Compose version $MIN_COMPOSE_VERSION or higher."
         exit 1
     fi
 
@@ -46,6 +87,37 @@ check_requirements() {
         log_error "curl is not installed. Please install curl first."
         exit 1
     fi
+
+    # Check for sufficient disk space (at least 1GB free)
+    if [ "$(df -P . | awk 'NR==2 {print $4}')" -lt 1048576 ]; then
+        log_error "Insufficient disk space. Please ensure at least 1GB of free space."
+        exit 1
+    fi
+
+    # Check network connectivity
+    if ! curl -s --head --request GET https://install.rocketgraph.ai | grep "200" >/dev/null; then
+        log_error "Network connectivity issue. Unable to reach https://install.rocketgraph.ai"
+        exit 1
+    fi
+}
+
+# Check for port conflicts
+check_ports() {
+    log_info "Checking for port conflicts..."
+
+    local ports_to_check=(
+        "${MC_PORT:-$DEFAULT_PORT}"
+        "${MC_SSL_PORT:-$DEFAULT_SSL_PORT}"
+        "${MC_DEFAULT_XGT_PORT:-$DEFAULT_XGT_PORT}"
+        "${APP_PORT:-$DEFAULT_APP_PORT}"
+    )
+
+    for port in "${ports_to_check[@]}"; do
+        if port_in_use "$port"; then
+            log_warn "Port $port is already in use. Please stop the existing service or specify a different port."
+            exit 1
+        fi
+    done
 }
 
 # Create installation directory (use current directory)
@@ -100,7 +172,7 @@ download_config() {
 # Pull and start containers
 deploy_containers() {
     log_info "Pulling latest container images..."
-    if ! docker compose pull; then
+    if ! timeout 300 docker compose pull; then
         log_error "Failed to pull container images"
         exit 1
     fi
@@ -117,12 +189,14 @@ main() {
     log_info "Starting installation process..."
 
     check_requirements
+    read_env_ports
+    check_ports
     setup_installation_dir
     download_config
     deploy_containers
 
     log_info "Installation completed successfully!"
-    log_info "Your application is now running at http://localhost:YOUR_PORT"
+    log_info "Your application is now running at http://localhost:${MC_PORT:-$DEFAULT_PORT}"
     log_info "To check the status, run: docker compose ps"
     log_info "To view logs, run: docker compose logs"
 }

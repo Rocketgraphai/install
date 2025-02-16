@@ -1,0 +1,63 @@
+# docker-compose.yml
+
+services:
+  frontend:
+    image: trovares/desktop_frontend:${MC_VERSION:-latest}
+    ports:
+      - "${MC_PORT:-80}:80"
+      - "${MC_SSL_PORT:-443}:443"
+    networks:
+      - external-network
+    volumes:
+      - ${MC_SSL_PUBLIC_CERT:-/dev/null}:/etc/ssl/certs/td.pem:ro
+      - ${MC_SSL_PRIVATE_KEY:-/dev/null}:/etc/ssl/private/td.pem:ro
+      - ${MC_SSL_CERT_CHAIN:-/dev/null}:/etc/ssl/certs/ca-chain.pem:ro
+
+  backend:
+    image: trovares/desktop_backend:${MC_VERSION:-latest}
+    environment:
+      MC_MONGO_URI: mongodb://mongodb:27017
+      MC_DEFAULT_XGT_HOST:
+      MC_DEFAULT_XGT_PORT:
+      MC_SESSION_TTL:
+      MC_SSL_PUBLIC_CERT:
+      MC_SSL_PRIVATE_KEY:
+      MC_SSL_PROXY_PUBLIC_CERT:
+      MC_SSL_PROXY_PRIVATE_KEY:
+      XGT_SERVER_CN:
+      XGT_AUTH_TYPES:
+    networks:
+      - database-network
+      - external-network
+    volumes:
+      - ${XGT_SSL_SERVER_CERT:-/dev/null}:/etc/ssl/certs/xgt-server.pem:ro
+      - ${MC_SSL_PROXY_PUBLIC_CERT:-/dev/null}:/etc/ssl/certs/proxy-client-cert.pem:ro
+      - ${MC_SSL_PROXY_PRIVATE_KEY:-/dev/null}:/etc/ssl/private/proxy-client-key.pem:ro
+      - mongodb-data:/app/data
+      - ${MC_ODBC_PATH:-/dev/null}:/odbc
+
+  xgt:
+    image: trovares/xgt:${XGT_VERSION:-latest}
+    ports:
+      - "4367:4367"
+    volumes:
+      - ${XGT_DATA_PATH:-/tmp}:/data
+      - ${XGT_LICENSE_FILE:-/dev/null}:/license/xgtd.lic
+    networks:
+      - external-network
+
+  mongodb:
+    image: ${MC_MONGODB_IMAGE:-mongo:latest}
+    restart: always
+    networks:
+      - database-network
+    volumes:
+      - mongodb-data:/data/db
+
+volumes:
+  mongodb-data:
+
+networks:
+  database-network:
+    internal: true
+  external-network:

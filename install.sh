@@ -7,16 +7,13 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# Default repository URL (can be overridden by environment variable)
-: "${MISSION_CONTROL_REPO:=trovares/mission-control}"
-
 # Log functions
 log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-# Check if script is run with sudo/root
-if [ "$(id -u)" -ne 0 ]; then
+# Check if script is run with sudo/root (skip this check on macOS)
+if [ "$(uname)" != "Darwin" ] && [ "$(id -u)" -ne 0 ]; then
     log_error "This script must be run as root or with sudo"
     exit 1
 fi
@@ -51,14 +48,13 @@ check_requirements() {
     fi
 }
 
-# Create installation directory
+# Create installation directory (use current directory)
 setup_installation_dir() {
-    local install_dir="/opt/myapp"
-    log_info "Creating installation directory at ${install_dir}..."
+    local install_dir="$(pwd)"
+    log_info "Using installation directory at ${install_dir}..."
 
-    mkdir -p "${install_dir}"
     if [ ! -d "${install_dir}" ]; then
-        log_error "Failed to create installation directory"
+        log_error "Failed to access installation directory"
         exit 1
     fi
 
@@ -67,18 +63,18 @@ setup_installation_dir() {
 
 # Download configuration files
 download_config() {
-    local github_raw_url="https://raw.githubusercontent.com/${MISSION_CONTROL_REPO}/main"
+    local download_url="https://install.rocketgraph.ai"
 
-    log_info "Downloading configuration files from ${github_raw_url}..."
+    log_info "Downloading configuration files from ${download_url}..."
 
     # Download docker-compose.yml
-    if ! curl -sSL "${github_raw_url}/docker-compose.yml" -o docker-compose.yml; then
+    if ! curl -sSL "${download_url}/docker-compose.yml" -o docker-compose.yml; then
         log_error "Failed to download docker-compose.yml"
         exit 1
     fi
 
     # Download .env template if it exists
-    curl -sSL "${github_raw_url}/.env.template" -o .env 2>/dev/null
+    curl -sSL "${download_url}/.env.template" -o .env 2>/dev/null
 
     # Set appropriate permissions
     chmod 600 .env 2>/dev/null
@@ -91,13 +87,13 @@ deploy_containers() {
     if ! docker compose pull; then
         log_error "Failed to pull container images"
         exit 1
-    }
+    fi
 
     log_info "Starting containers..."
     if ! docker compose up -d; then
         log_error "Failed to start containers"
         exit 1
-    }
+    fi
 }
 
 # Main installation process

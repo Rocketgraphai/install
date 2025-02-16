@@ -13,7 +13,7 @@ log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 # Check if script is run with sudo/root (skip this check on macOS)
-if [ "$(uname)" != "Darwin" ] && [ "$(id -u)" -ne 0 ]; then
+if [ "$(uname)" != "Darwin" ] && [ "$(id -u)" -ne 0; then
     log_error "This script must be run as root or with sudo"
     exit 1
 fi
@@ -73,8 +73,24 @@ download_config() {
         exit 1
     fi
 
-    # Download .env template if it exists
-    curl -sSL "${download_url}/.env.template" -o .env 2>/dev/null
+    # Download env.template if it exists
+    if ! curl -sSL "${download_url}/env.template" -o env.template; then
+        log_warn "Failed to download env.template"
+    fi
+
+    # Merge env.template with existing .env if it exists
+    if [ -f .env ]; then
+        log_info "Merging env.template with existing .env file..."
+        while IFS= read -r line; do
+            key=$(echo "$line" | cut -d '=' -f 1)
+            if ! grep -q "^$key=" .env; then
+                echo "$line" >> .env
+            fi
+        done < env.template
+    else
+        log_info "Creating .env file from env.template..."
+        cp env.template .env
+    fi
 
     # Set appropriate permissions
     chmod 600 .env 2>/dev/null

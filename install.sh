@@ -33,7 +33,7 @@ command_exists() {
 
 # Function to check if a port is in use
 port_in_use() {
-    lsof -i :"$1" >/dev/null 2>&1
+    lsof -iTCP:"$1" -P -n | grep LISTEN
 }
 
 # Function to compare versions

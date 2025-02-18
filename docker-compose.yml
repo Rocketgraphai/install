@@ -1,5 +1,7 @@
 # docker-compose.yml
 
+name: rocketgraph
+
 services:
   frontend:
     image: trovares/desktop_frontend:${MC_VERSION:-latest}

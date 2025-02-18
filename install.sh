@@ -42,6 +42,34 @@ version_ge() {
     [ "$(printf '%s\n' "$@" | sort -V | head -n 1)" = "$1" ]
 }
 
+# Function to run command with timeout
+run_with_timeout() {
+    local timeout=$1
+    shift
+    local command="$@"
+
+    # Start the command in background
+    $command & local pid=$!
+
+    # Wait for specified timeout
+    local count=0
+    while [ $count -lt $timeout ] && kill -0 $pid 2>/dev/null; do
+        sleep 1
+        count=$((count + 1))
+    done
+
+    # If process is still running, kill it and return error
+    if kill -0 $pid 2>/dev/null; then
+        kill -TERM $pid
+        wait $pid 2>/dev/null
+        return 1
+    fi
+
+    # Wait for process to finish and get return code
+    wait $pid
+    return $?
+}
+
 # Read port values from .env file if it exists
 read_env_ports() {
     if [ -f .env ]; then
@@ -62,7 +90,7 @@ check_requirements() {
     fi
 
     # Check if Docker is running with a timeout
-    if ! timeout 10 docker version >/dev/null 2>&1; then
+    if ! run_with_timeout 10 docker version; then
         log_error "Docker is not running or not responding. Please start Docker first."
         exit 1
     fi
@@ -172,7 +200,7 @@ download_config() {
 # Pull and start containers
 deploy_containers() {
     log_info "Pulling latest container images..."
-    if ! timeout 300 docker compose pull; then
+    if ! run_with_timeout 300 docker compose pull; then
         log_error "Failed to pull container images"
         exit 1
     fi

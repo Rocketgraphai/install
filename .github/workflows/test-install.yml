@@ -64,10 +64,3 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           cat ./install.sh | sudo sh
-
-       - name: Run install.sh on Windows
-        if: runner.os == 'Windows'
-        run: |
-          powershell -ExecutionPolicy Bypass -File install.ps1
-        shell: pwsh
-

@@ -21,7 +21,7 @@ log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 # Check if script is run with sudo/root (skip this check on macOS)
-if [ "$(uname)" != "Darwin" ] && [ "$(id -u)" -ne 0; then
+if [ "$(uname)" != "Darwin" ] && [ "$(id -u)" -ne 0 ]; then
     log_error "This script must be run as root or with sudo"
     exit 1
 fi
@@ -134,17 +134,17 @@ check_requirements() {
 check_ports() {
     log_info "Checking for port conflicts..."
 
-    local ports_to_check=(
-        "${MC_PORT:-$DEFAULT_PORT}"
-        # "${MC_SSL_PORT:-$DEFAULT_SSL_PORT}"
-        "${MC_DEFAULT_XGT_PORT:-$DEFAULT_XGT_PORT}"
-    )
+    # "${MC_SSL_PORT:-$DEFAULT_SSL_PORT}"
+    ports_to_check="${MC_PORT:-$DEFAULT_PORT} ${MC_DEFAULT_XGT_PORT:-$DEFAULT_XGT_PORT}"
 
-    for port in "${ports_to_check[@]}"; do
-        if port_in_use "$port"; then
-            log_warn "Port $port is already in use. Please stop the existing service or specify a different port."
-            exit 1
-        fi
+    # Convert space-separated string into individual arguments
+    set -- $ports_to_check
+
+    for port in "$@"; do
+      if port_in_use "$port"; then
+        log_warn "Port $port is already in use. Please stop the existing service or specify a different port."
+        exit 1
+      fi
     done
 }
 

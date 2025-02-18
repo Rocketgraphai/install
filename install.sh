@@ -9,9 +9,8 @@ NC='\033[0m' # No Color
 
 # Default ports
 DEFAULT_PORT=80
-DEFAULT_SSL_PORT=443
+# DEFAULT_SSL_PORT=443
 DEFAULT_XGT_PORT=4367
-DEFAULT_APP_PORT=3000
 
 # Minimum required Docker Compose version
 MIN_COMPOSE_VERSION="1.29.0"
@@ -48,8 +47,8 @@ run_with_timeout() {
     shift
     local command="$@"
 
-    # Start the command in background
-    $command & local pid=$!
+    # Start the command in background and redirect output
+    ($command >/dev/null 2>&1) & local pid=$!
 
     # Wait for specified timeout
     local count=0
@@ -74,7 +73,9 @@ run_with_timeout() {
 read_env_ports() {
     if [ -f .env ]; then
         log_info "Reading port values from .env file..."
-        export $(grep -E '^(MC_PORT|MC_SSL_PORT|MC_DEFAULT_XGT_PORT|APP_PORT)=' .env | xargs)
+        # export $(grep -E '^(MC_PORT|MC_SSL_PORT|MC_DEFAULT_XGT_PORT)=' .env | xargs)
+        export $(grep -E '^(MC_PORT|MC_DEFAULT_XGT_PORT)=' .env | xargs)
+
     fi
 }
 
@@ -90,7 +91,7 @@ check_requirements() {
     fi
 
     # Check if Docker is running with a timeout
-    if ! run_with_timeout 10 docker version; then
+    if ! run_with_timeout 10 "docker version"; then
         log_error "Docker is not running or not responding. Please start Docker first."
         exit 1
     fi
@@ -135,9 +136,8 @@ check_ports() {
 
     local ports_to_check=(
         "${MC_PORT:-$DEFAULT_PORT}"
-        "${MC_SSL_PORT:-$DEFAULT_SSL_PORT}"
+        # "${MC_SSL_PORT:-$DEFAULT_SSL_PORT}"
         "${MC_DEFAULT_XGT_PORT:-$DEFAULT_XGT_PORT}"
-        "${APP_PORT:-$DEFAULT_APP_PORT}"
     )
 
     for port in "${ports_to_check[@]}"; do

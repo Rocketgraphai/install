@@ -2,9 +2,7 @@
 
 # Default ports
 $DEFAULT_PORT = 80
-$DEFAULT_SSL_PORT = 443
 $DEFAULT_XGT_PORT = 4367
-$DEFAULT_APP_PORT = 3000
 
 # Minimum required Docker Compose version
 $MIN_COMPOSE_VERSION = "1.29.0"
@@ -63,17 +61,17 @@ function Test-Requirements {
         exit 1
     }
 
-    # Check if Docker is running
+    # Check if Docker is running (with output suppression)
     try {
-        $null = docker version
+        $null = docker version 2>$null
     }
     catch {
         Write-ErrorLog "Docker is not running or not responding. Please start Docker first."
         exit 1
     }
 
-    # Check Docker Compose version
-    $composeVersion = (docker compose version --short) -replace '[^0-9.]'
+    # Check Docker Compose version (with output suppression)
+    $composeVersion = @(docker compose version --short 2>$null)[0] -replace '[^0-9.]'
     if (-not (Test-VersionGreaterOrEqual $composeVersion $MIN_COMPOSE_VERSION)) {
         Write-ErrorLog "Docker Compose version $composeVersion is too old. Please install Docker Compose version $MIN_COMPOSE_VERSION or higher."
         exit 1
@@ -99,15 +97,42 @@ function Test-Requirements {
     }
 }
 
+# Function to check Windows requirements
+function Test-WindowsRequirements {
+    Write-InfoLog "Checking Windows requirements..."
+
+    # Check Windows version
+    $osInfo = Get-WmiObject -Class Win32_OperatingSystem
+    $version = [System.Version]$osInfo.Version
+
+    if ($version.Major -lt 10) {
+        Write-ErrorLog "Windows 10 or higher is required"
+        exit 1
+    }
+
+    if ($version.Build -lt 18362) {
+        Write-ErrorLog "Windows 10 version 1903 or higher is required"
+        exit 1
+    }
+
+    # Check if WSL is installed (required for Home edition)
+    if ($osInfo.Caption -like "*Home*") {
+        $wsl = Get-Command wsl.exe -ErrorAction SilentlyContinue
+        if (-not $wsl) {
+            Write-ErrorLog "WSL 2 is required for Windows Home edition"
+            Write-InfoLog "Visit https://docs.microsoft.com/windows/wsl/install for installation instructions"
+            exit 1
+        }
+    }
+}
+
 # Check for port conflicts
 function Test-Ports {
     Write-InfoLog "Checking for port conflicts..."
 
     $portsToCheck = @(
         $DEFAULT_PORT,
-        $DEFAULT_SSL_PORT,
-        $DEFAULT_XGT_PORT,
-        $DEFAULT_APP_PORT
+        $DEFAULT_XGT_PORT
     )
 
     foreach ($port in $portsToCheck) {
@@ -160,19 +185,19 @@ function Get-ConfigurationFiles {
     }
 }
 
-# Pull and start containers
+# Pull and start containers (with output suppression)
 function Start-Containers {
     Write-InfoLog "Pulling latest container images..."
-    $pullJob = Start-Job -ScriptBlock { docker compose pull }
+    $pullJob = Start-Job -ScriptBlock { docker compose pull 2>$null }
     if (-not (Wait-Job $pullJob -Timeout 300)) {
         Write-ErrorLog "Failed to pull container images (timeout)"
         exit 1
     }
-    Receive-Job $pullJob
+    $null = Receive-Job $pullJob
     Remove-Job $pullJob
 
     Write-InfoLog "Starting containers..."
-    docker compose up -d
+    $null = docker compose up -d 2>$null
     if ($LASTEXITCODE -ne 0) {
         Write-ErrorLog "Failed to start containers"
         exit 1
@@ -183,6 +208,7 @@ function Start-Containers {
 function Start-Installation {
     Write-InfoLog "Starting installation process..."
 
+    Test-WindowsRequirements
     Test-Requirements
     Test-Ports
     Initialize-InstallationDirectory

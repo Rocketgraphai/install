@@ -27,21 +27,9 @@ function Test-Command {
 
 # Function to check if a port is in use
 function Test-PortInUse {
-    param($Port)
-    $listener = $null
-    try {
-        $listener = New-Object System.Net.Sockets.TcpListener([System.Net.IPAddress]::Any, $Port)
-        $listener.Start()
-        return $false
-    }
-    catch {
-        return $true
-    }
-    finally {
-        if ($listener) {
-            $listener.Stop()
-        }
-    }
+    param([int]$Port)
+    $tcpConnections = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue
+    return $tcpConnections -ne $null
 }
 
 # Function to compare versions

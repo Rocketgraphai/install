@@ -30,11 +30,11 @@ function Get-OSPlatform {
     return "Unknown"
 }
 
-$global:isWindows = (Get-OSPlatform) -eq "Windows"
+$global:isWindowsPlat = (Get-OSPlatform) -eq "Windows"
 
 # Check if script is run as administrator
 $isAdmin = $false
-if ($isWindows) {
+if ($isWindowsPlat) {
     $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 } elseif ($IsLinux -or $IsMacOS) {
     $isAdmin = [int](id -u) -eq 0
@@ -53,11 +53,12 @@ function Test-Command {
 # Function to check if a port is in use
 function Test-PortInUse {
     param([int]$Port)
-    if ($isWindows) {
+    if ($isWindowsPlat) {
         # Windows: Use Get-NetTCPConnection
         return (Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue) -ne $null
     } else {
         # Linux/macOS: Use lsof
+        $result = lsof -iTCP:$Port -sTCP:LISTEN
         return ($result -ne $null) -and ($result.Count -gt 0)
     }
 }
@@ -226,7 +227,7 @@ function Start-Containers {
 function Start-Installation {
     Write-InfoLog "Starting installation process..."
 
-    if ($isWindows) {
+    if ($isWindowsPlat) {
       Test-WindowsRequirements
     }
     Test-Requirements

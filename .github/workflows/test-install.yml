@@ -60,5 +60,7 @@ jobs:
 
       - name: Run install.sh
         run: |
+          set +e
           sudo docker compose down
+          set -e
           cat ./install.sh | sudo sh

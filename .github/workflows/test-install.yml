@@ -53,7 +53,12 @@ jobs:
           docker --version
           lsof -v
 
+      - name: Run install.sh in powershell
+        if: runner.os == 'Linux'
+        run: |
+          docker compose down
+          pwsh ./install.ps1
+
       - name: Run install.sh
         run: |
           cat ./install.sh | sudo sh
-

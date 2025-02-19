@@ -13,7 +13,12 @@ function Write-WarnLog { param($Message) Write-Host "[WARN] $Message" -Foregroun
 function Write-ErrorLog { param($Message) Write-Host "[ERROR] $Message" -ForegroundColor Red }
 
 # Check if script is run as administrator
-$isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+$isAdmin = $false
+if ($IsWindows) {
+    $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+} elseif ($IsLinux -or $IsMacOS) {
+    $isAdmin = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value -eq "0" -or $(whoami) -eq "root"
+}
 if (-not $isAdmin) {
     Write-ErrorLog "This script must be run as Administrator"
     exit 1

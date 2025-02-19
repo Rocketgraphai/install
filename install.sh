@@ -22,12 +22,6 @@ log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-# Check if script is run with sudo/root (skip this check on macOS).
-if [ "$(uname)" != "Darwin" ] && [ "$(id -u)" -ne 0 ]; then
-    log_error "This script must be run as root or with sudo"
-    exit 1
-fi
-
 # Function to check if a command exists.
 command_exists() {
     command -v "$1" >/dev/null 2>&1
@@ -75,22 +69,22 @@ run_with_timeout() {
 check_requirements() {
     log_info "Checking system requirements."
 
-    # Check Docker.
+    # Check if Docker is installed.
     if ! command_exists docker; then
         log_error "Docker is not installed. Please install Docker first."
         log_info "Visit https://docs.docker.com/get-docker/ for installation instructions."
         exit 1
     fi
 
-    # Check if Docker is running with a timeout.
-    if ! run_with_timeout 10 "docker version"; then
-        log_error "Docker is not running or not responding. Please start Docker first."
+    # Check that Docker is running and the user has permissions to use it.
+    if ! run_with_timeout 10 "docker ps"; then
+        log_error "Docker is either not running or this user doesn't have permission to use Docker. Make sure Docker is started. If Docker is running, it is likely the user doesn't have permission to use Docker. Either run the script as root or contact your system administrator."
         exit 1
     fi
 
-    # Check Docker Compose.
-    if ! command_exists docker compose && ! command_exists docker-compose; then
-        log_error "Docker Compose is not installed. Please install Docker Compose first."
+    # Check if Docker Compose is installed.
+    if ! run_with_timeout 10 "docker compose version"; then
+        log_error "Docker is installed but Compose is not. Please install Docker Compose first."
         log_info "Visit https://docs.docker.com/compose/install/ for installation instructions."
         exit 1
     fi
@@ -190,6 +184,13 @@ set_variables() {
     fi
 }
 
+# If on PowerPC and a mongodb image is not requested, set it.
+set_ppc_mongodb() {
+    if [ $(uname -m) == "ppc64le" ] && ! grep -q '^MC_MONGODB_IMAGE=' .env; then
+        export MC_MONGODB_IMAGE="ibmcom/mongodb-ppc64le:latest"
+    fi
+}
+
 # Check for port conflicts.
 check_ports() {
     log_info "Checking for port conflicts."
@@ -230,6 +231,7 @@ main() {
     check_installation_dir
     download_config
     set_variables
+    set_ppc_mongodb
     check_ports
     deploy_containers
 

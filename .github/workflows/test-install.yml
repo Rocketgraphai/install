@@ -56,9 +56,9 @@ jobs:
       - name: Run install.sh in powershell
         if: runner.os == 'Linux'
         run: |
-          docker compose down
-          pwsh ./install.ps1
+          sudo pwsh ./install.ps1
 
       - name: Run install.sh
         run: |
+          sudo docker compose down
           cat ./install.sh | sudo sh

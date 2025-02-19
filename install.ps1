@@ -17,7 +17,7 @@ $isAdmin = $false
 if ($IsWindows) {
     $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 } elseif ($IsLinux -or $IsMacOS) {
-    $isAdmin = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value -eq "0" -or $(whoami) -eq "root"
+    $isAdmin = [int](id -u) -eq 0
 }
 if (-not $isAdmin) {
     Write-ErrorLog "This script must be run as Administrator"
@@ -33,8 +33,13 @@ function Test-Command {
 # Function to check if a port is in use
 function Test-PortInUse {
     param([int]$Port)
-    $tcpConnections = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue
-    return $tcpConnections -ne $null
+    if ($IsWindows) {
+        # Windows: Use Get-NetTCPConnection
+        return (Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue) -ne $null
+    } else {
+        # Linux/macOS: Use lsof
+        return ($result -ne $null) -and ($result.Count -gt 0)
+    }
 }
 
 # Function to compare versions
@@ -201,7 +206,9 @@ function Start-Containers {
 function Start-Installation {
     Write-InfoLog "Starting installation process..."
 
-    Test-WindowsRequirements
+    if ($IsWindows) {
+      Test-WindowsRequirements
+    }
     Test-Requirements
     Test-Ports
     Initialize-InstallationDirectory

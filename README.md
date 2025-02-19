@@ -19,13 +19,13 @@ powershell -ExecutionPolicy Bypass -Command "& { [System.Net.ServicePointManager
 
 ## To run these scripts, use the following commands in your shell:
 
+For Linux/Mac:
 ```bash
-# For Linux/Mac
 bash install.sh
 ```
 
+For Windows:
 ```powershell
-# For Windows
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 

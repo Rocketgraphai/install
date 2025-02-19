@@ -170,7 +170,7 @@ function Initialize-InstallationDirectory {
 
 # Download configuration files
 function Get-ConfigurationFiles {
-    $downloadUrl = "https://install.rocketgraph.com"
+    $downloadUrl = "https://raw.githubusercontent.com/Rocketgraphai/rocketgraph/main"
     Write-InfoLog "Downloading configuration files from ${downloadUrl}..."
 
     try {

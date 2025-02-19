@@ -9,11 +9,13 @@ NC='\033[0m' # No Color.
 
 # Default ports.
 DEFAULT_PORT=80
-# DEFAULT_SSL_PORT=443
+DEFAULT_SSL_PORT=443
 DEFAULT_XGT_PORT=4367
 
 # Minimum required Docker Compose version.
 MIN_COMPOSE_VERSION="1.29.0"
+
+DOWNLOAD_URL="https://github.com/Rocketgraphai/rocketgraph"
 
 # Log functions.
 log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
@@ -69,26 +71,14 @@ run_with_timeout() {
     return $?
 }
 
-# Read port values from .env file if it exists.  This makes these variables
-# available to be used in this script.  If the port values aren't defined, set
-# them to the defaults.
-read_env_ports() {
-    if [ -f .env ]; then
-        log_info "Reading port values from .env file..."
-        # export $(grep -E '^(MC_PORT|MC_SSL_PORT|MC_DEFAULT_XGT_PORT)=' .env | xargs)
-        export $(grep -E '^(MC_PORT|MC_DEFAULT_XGT_PORT)=' .env | xargs)
-
-    fi
-}
-
 # Check system requirements.
 check_requirements() {
-    log_info "Checking system requirements..."
+    log_info "Checking system requirements."
 
     # Check Docker.
     if ! command_exists docker; then
         log_error "Docker is not installed. Please install Docker first."
-        log_info "Visit https://docs.docker.com/get-docker/ for installation instructions"
+        log_info "Visit https://docs.docker.com/get-docker/ for installation instructions."
         exit 1
     fi
 
@@ -101,7 +91,7 @@ check_requirements() {
     # Check Docker Compose.
     if ! command_exists docker compose && ! command_exists docker-compose; then
         log_error "Docker Compose is not installed. Please install Docker Compose first."
-        log_info "Visit https://docs.docker.com/compose/install/ for installation instructions"
+        log_info "Visit https://docs.docker.com/compose/install/ for installation instructions."
         exit 1
     fi
 
@@ -126,18 +116,88 @@ check_requirements() {
     fi
 
     # Check network connectivity.
-    if ! curl -s --head --request GET https://install.rocketgraph.com | grep "200" >/dev/null; then
-        log_error "Network connectivity issue. Unable to reach https://install.rocketgraph.com"
+    if ! curl -s --head --request GET ${DOWNLOAD_URL} | grep "200" >/dev/null; then
+        log_error "Network connectivity issue. Unable to reach ${DOWNLOAD_URL}."
         exit 1
+    fi
+}
+
+# Create installation directory (use current directory).
+check_installation_dir() {
+    local install_dir="$(pwd)"
+    log_info "Using installation directory at ${install_dir}/."
+
+    if [ ! -w "${install_dir}" ]; then
+        log_error "Write permissions required in ${install_dir}".
+        exit 1
+    fi
+}
+
+# Download config files.
+download_config() {
+    local url="https://raw.githubusercontent.com/Rocketgraphai/rocketgraph/main"
+
+    log_info "Downloading config files from ${DOWNLOAD_URL}/."
+
+    # Download docker-compose.yml.
+    if ! curl -sSL "${url}/docker-compose.yml" -o docker-compose.yml; then
+        log_error "Failed to download docker-compose.yml."
+        exit 1
+    fi
+
+    # Download env.template.
+    if ! curl -sSL "${url}/env.template" -o env.template; then
+        log_warn "Failed to download env.template."
+    fi
+
+    # Copy env.template to .env if .env doesn't exist.
+    if [ ! -f .env ]; then
+        log_info "Creating .env file from env.template."
+        cp env.template .env
+    fi
+
+    # Set appropriate permissions.
+    chmod 600 .env 2>/dev/null
+    chmod 644 docker-compose.yml
+}
+
+# Set the values of variables needed by the script.  These get a value from the
+# .env file or a default value.  Note that these variables do NOT affect the
+# docker containers.  They get their values strictly from the .env file.
+set_variables() {
+    log_info "Reading needed values from .env file."
+
+    MC_PORT="$DEFAULT_PORT"
+    if grep -q '^MC_PORT=' .env; then
+        MC_PORT=$(grep -E '^MC_PORT=' .env | cut -d'=' -f2-)
+    fi
+
+    MC_SSL_PORT="$DEFAULT_SSL_PORT"
+    if grep -q '^MC_SSL_PORT=' .env; then
+        MC_SSL_PORT=$(grep -E '^MC_SSL_PORT=' .env | cut -d'=' -f2-)
+    fi
+
+    MC_DEFAULT_XGT_PORT="$DEFAULT_XGT_PORT"
+    if grep -q '^MC_DEFAULT_XGT_PORT=' .env; then
+        MC_DEFAULT_XGT_PORT=$(grep -E '^MC_DEFAULT_XGT_PORT=' .env | cut -d'=' -f2-)
+    fi
+
+    # Determine if SSL is being used to serve Mission Control.
+    USE_SSL=0
+    if grep -q '^MC_SSL_PUBLIC_CERT=' .env &&
+       grep -q '^MC_SSL_PRIVATE_KEY=' .env; then
+        USE_SSL=1
     fi
 }
 
 # Check for port conflicts.
 check_ports() {
-    log_info "Checking for port conflicts..."
+    log_info "Checking for port conflicts."
 
-    # "${MC_SSL_PORT:-$DEFAULT_SSL_PORT}"
-    ports_to_check="${MC_PORT:-$DEFAULT_PORT} ${MC_DEFAULT_XGT_PORT:-$DEFAULT_XGT_PORT}"
+    ports_to_check="${MC_PORT} ${MC_DEFAULT_XGT_PORT}"
+    if [ "$USE_SSL" -eq 1 ]; then
+        ports_to_check="${ports_to_check} ${MC_SSL_PORT}"
+    fi
 
     for port in ${ports_to_check}; do
         if port_in_use "$port"; then
@@ -147,83 +207,38 @@ check_ports() {
     done
 }
 
-# Create installation directory (use current directory).
-setup_installation_dir() {
-    local install_dir="$(pwd)"
-    log_info "Using installation directory at ${install_dir}..."
-
-    if [ ! -d "${install_dir}" ]; then
-        log_error "Failed to access installation directory"
-        exit 1
-    fi
-
-    cd "${install_dir}" || exit 1
-}
-
-# Download configuration files.
-download_config() {
-    local download_url="https://install.rocketgraph.com"
-
-    log_info "Downloading configuration files from ${download_url}..."
-
-    # Download docker-compose.yml.
-    if ! curl -sSL "${download_url}/docker-compose.yml" -o docker-compose.yml; then
-        log_error "Failed to download docker-compose.yml"
-        exit 1
-    fi
-
-    # Download env.template.
-    if ! curl -sSL "${download_url}/env.template" -o env.template; then
-        log_warn "Failed to download env.template"
-    fi
-
-    # Merge env.template with existing .env if it exists.
-    if [ -f .env ]; then
-        log_info "Merging env.template with existing .env file..."
-        while IFS= read -r line; do
-            key=$(echo "$line" | cut -d '=' -f 1)
-            if ! grep -q "^$key=" .env; then
-                echo "$line" >> .env
-            fi
-        done < env.template
-    else
-        log_info "Creating .env file from env.template..."
-        cp env.template .env
-    fi
-
-    # Set appropriate permissions.
-    chmod 600 .env 2>/dev/null
-    chmod 644 docker-compose.yml
-}
-
 # Pull and start containers.
 deploy_containers() {
-    log_info "Pulling latest container images..."
+    log_info "Pulling latest container images."
     if ! run_with_timeout 300 docker compose pull; then
-        log_error "Failed to pull container images"
+        log_error "Failed to pull container images."
         exit 1
     fi
 
-    log_info "Starting containers..."
+    log_info "Starting containers."
     if ! docker compose up -d; then
-        log_error "Failed to start containers"
+        log_error "Failed to start containers."
         exit 1
     fi
 }
 
 # Main installation process.
 main() {
-    log_info "Starting installation process..."
+    log_info "Starting installation process."
 
     check_requirements
-    read_env_ports
-    check_ports
-    setup_installation_dir
+    check_installation_dir
     download_config
+    set_variables
+    check_ports
     deploy_containers
 
     log_info "Installation completed successfully!"
-    log_info "Your application is now running at http://localhost:${MC_PORT:-$DEFAULT_PORT}"
+    if [ "$USE_SSL" -eq 1 ]; then
+      log_info "Mission Control is now running at https://localhost:${MC_SSL_PORT}"
+    else
+      log_info "Mission Control is now running at http://localhost:${MC_PORT}"
+    fi
     log_info "To check the status, run: docker compose ps"
     log_info "To view logs, run: docker compose logs"
 }

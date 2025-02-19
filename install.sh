@@ -126,8 +126,8 @@ check_requirements() {
     fi
 
     # Check network connectivity.
-    if ! curl -s --head --request GET https://install.rocketgraph.ai | grep "200" >/dev/null; then
-        log_error "Network connectivity issue. Unable to reach https://install.rocketgraph.ai"
+    if ! curl -s --head --request GET https://install.rocketgraph.com | grep "200" >/dev/null; then
+        log_error "Network connectivity issue. Unable to reach https://install.rocketgraph.com"
         exit 1
     fi
 }
@@ -162,7 +162,7 @@ setup_installation_dir() {
 
 # Download configuration files.
 download_config() {
-    local download_url="https://install.rocketgraph.ai"
+    local download_url="https://install.rocketgraph.com"
 
     log_info "Downloading configuration files from ${download_url}..."
 

@@ -84,13 +84,13 @@ function Test-Requirements {
 
     # Check network connectivity
     try {
-        $response = Invoke-WebRequest -Uri "https://install.rocketgraph.ai" -Method Head
+        $response = Invoke-WebRequest -Uri "https://install.rocketgraph.com" -Method Head
         if ($response.StatusCode -ne 200) {
             throw "Non-200 status code"
         }
     }
     catch {
-        Write-ErrorLog "Network connectivity issue. Unable to reach https://install.rocketgraph.ai"
+        Write-ErrorLog "Network connectivity issue. Unable to reach https://install.rocketgraph.com"
         exit 1
     }
 }
@@ -149,7 +149,7 @@ function Initialize-InstallationDirectory {
 
 # Download configuration files
 function Get-ConfigurationFiles {
-    $downloadUrl = "https://install.rocketgraph.ai"
+    $downloadUrl = "https://install.rocketgraph.com"
     Write-InfoLog "Downloading configuration files from ${downloadUrl}..."
 
     try {

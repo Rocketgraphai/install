@@ -2,13 +2,13 @@
 
 ## To download and run the installation script in one command:
 
+For Linux/Mac:
 ```bash
-# For Linux/Mac
 curl -sSL https://install.rocketgraph.com/install.sh | sh
 ```
 
+For Windows:
 ```powershell
-# For Windows
 powershell -ExecutionPolicy Bypass -Command "& { [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://install.rocketgraph.com/install.ps1')) }"
 ```
 

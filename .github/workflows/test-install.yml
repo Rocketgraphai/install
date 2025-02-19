@@ -75,5 +75,7 @@ jobs:
       - name: Run install.sh on Windows
         if: runner.os == 'Windows'
         run: |
+          (Get-Content "install.ps1") -replace 'DEFAULT_PORT = 80', 'DEFAULT_PORT = 3000' | Set-Content "install.ps1"
+          (Get-Content "env.template") -replace 'MC_PORT=80', 'MC_PORT=3000' | Set-Content "env.template"
           powershell -ExecutionPolicy Bypass -File install.ps1
         shell: pwsh

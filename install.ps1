@@ -12,9 +12,29 @@ function Write-InfoLog { param($Message) Write-Host "[INFO] $Message" -Foregroun
 function Write-WarnLog { param($Message) Write-Host "[WARN] $Message" -ForegroundColor Yellow }
 function Write-ErrorLog { param($Message) Write-Host "[ERROR] $Message" -ForegroundColor Red }
 
+function Get-OSPlatform {
+    # Try PowerShell Core method first
+    if (Test-Path variable:IsWindows) {
+        if ($IsWindows) { return "Windows" }
+        elseif ($IsLinux) { return "Linux" }
+        elseif ($IsMacOS) { return "MacOS" }
+    }
+    # Fall back to .NET method for PowerShell 5.1
+    else {
+        $platform = [System.Environment]::OSVersion.Platform
+        if ($platform -match "Win") { return "Windows" }
+        # This will never execute in PS 5.1, but included for completeness
+        elseif ($platform -match "Unix") { return "Linux/Unix" }
+        elseif ($platform -match "MacOS") { return "MacOS" }
+    }
+    return "Unknown"
+}
+
+$global:isWindowsPlat = (Get-OSPlatform) -eq "Windows"
+
 # Check if script is run as administrator
 $isAdmin = $false
-if ($IsWindows) {
+if ($isWindowsPlat) {
     $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 } elseif ($IsLinux -or $IsMacOS) {
     $isAdmin = [int](id -u) -eq 0
@@ -33,11 +53,12 @@ function Test-Command {
 # Function to check if a port is in use
 function Test-PortInUse {
     param([int]$Port)
-    if ($IsWindows) {
+    if ($isWindowsPlat) {
         # Windows: Use Get-NetTCPConnection
         return (Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue) -ne $null
     } else {
         # Linux/macOS: Use lsof
+        $result = lsof -iTCP:$Port -sTCP:LISTEN
         return ($result -ne $null) -and ($result.Count -gt 0)
     }
 }
@@ -206,7 +227,7 @@ function Start-Containers {
 function Start-Installation {
     Write-InfoLog "Starting installation process..."
 
-    if ($IsWindows) {
+    if ($isWindowsPlat) {
       Test-WindowsRequirements
     }
     Test-Requirements

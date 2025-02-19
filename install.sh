@@ -210,14 +210,14 @@ check_ports() {
 # Pull and start containers.
 deploy_containers() {
     log_info "Pulling latest container images."
-    if ! run_with_timeout 300 docker compose pull; then
-        log_error "Failed to pull container images."
+    if ! output=$(run_with_timeout 300 docker compose pull 2>&1); then
+        log_error "Failed to pull container images. Error: $output"
         exit 1
     fi
 
     log_info "Starting containers."
-    if ! docker compose up -d; then
-        log_error "Failed to start containers."
+    if ! output=$(docker compose up -d 2>&1); then
+        log_error "Failed to start containers. Error: $output"
         exit 1
     fi
 }

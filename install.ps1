@@ -185,10 +185,10 @@ function Start-Containers {
     Remove-Job $pullJob
 
     Write-InfoLog "Starting containers..."
-    $null = docker compose up -d 2>$null
+    $null = docker compose up -d 2>&1 | Tee-Object -Variable dockerOutput
     if ($LASTEXITCODE -ne 0) {
-        Write-ErrorLog "Failed to start containers"
-        exit 1
+      Write-ErrorLog "Failed to start containers. Error: $dockerOutput"
+      exit 1
     }
 }
 

@@ -52,6 +52,9 @@ jobs:
         run: |
           choco install -y docker-cli docker-compose
           Start-Service docker
+
+          $dockerd = & "C:\Program Files\Docker\Docker\DockerCli.exe" -SwitchLinuxEngine
+          Write-Host "Docker is now using Linux containers."
         shell: pwsh
 
       - name: Verify Docker & lsof installation on Linux/macOS

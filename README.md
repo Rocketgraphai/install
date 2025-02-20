@@ -9,7 +9,7 @@ curl -sSL https://install.rocketgraph.com/install.sh | sh
 
 For Windows:
 ```powershell
-powershell -ExecutionPolicy Bypass -Command "& { [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://install.rocketgraph.com/install.ps1')) }"
+powershell -ep Bypass -c "iex (iwr -useb 'https://install.rocketgraph.com/install.ps1')"
 ```
 
 ## Alternatively, you can download the installation scripts and run them in your shell:

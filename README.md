@@ -24,7 +24,7 @@ These scripts **require** [Docker](https://www.docker.com/products/docker-deskto
 
 - Install the necessary Docker Compose files (**`.yml`** and **`.env`**) in the directory where they are run.
   📌 *If you want to install Rocketgraph in a specific location, run the script from that directory.*
-- Download and start **four separate containers** using Docker Compose.
+- Download and start **four separate containers** using [Docker Compose](https://docs.docker.com/compose).
 - The application will be available at **[http://localhost](http://localhost)** once the installation is complete.
 
 ### Managing Rocketgraph Services

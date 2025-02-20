@@ -38,8 +38,6 @@ docker compose up -d   # Start the services in the background
 docker compose down    # Stop and remove the containers
 ```
 
-Alternatively, you can manage containers using the **Docker Desktop** application.
-
 For more details, refer to the **[Mission Control Guide](https://github.com/Rocketgraphai/rocketgraph/blob/main/README.md).**
 
 ## Local Installation

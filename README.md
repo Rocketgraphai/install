@@ -29,9 +29,9 @@ These scripts **require** [Docker](https://www.docker.com/products/docker-deskto
 
 ### Managing Rocketgraph Services
 
-After installation, you can control the Rocketgraph services using **Docker Compose**.
+After installation, you can manage Rocketgraph services using **Docker Desktop**, which provides a graphical interface to start, stop, and monitor your containers.
 
-**💡 These commands must be run from the installation directory (where the `.yml` file is located):**
+If you prefer using the command line, you can run the following commands from the installation directory (where the `.yml` file is located):
 
 ```bash
 docker compose up -d   # Start the services in the background

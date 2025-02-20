@@ -3,28 +3,35 @@ name: Test GitHub Pages Deployment
 on:
   push:
     branches:
-      - test-deploy  # Change this to the branch you want to test
+      - test-deploy  # Runs only on the test branch
 
 jobs:
-  test-build:
+  test-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Setup Ruby and Jekyll
+      - name: Setup Ruby and Bundler
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.1'
           bundler-cache: true
 
-      - name: Install Jekyll dependencies
-        run: gem install jekyll jekyll-remote-theme
+      - name: Install Jekyll and required plugins
+        run: |
+          gem install jekyll jekyll-remote-theme bundler
+          bundle init
+          echo 'gem "jekyll"' >> Gemfile
+          echo 'gem "jekyll-remote-theme"' >> Gemfile
+          bundle install
 
       - name: Build Jekyll site
-        run: jekyll build
+        run: bundle exec jekyll build
 
-      - name: Test deployment (dry run)
-        run: |
-          echo "Build successful!"
-          echo "Site preview available at _site/index.html"
+      - name: Deploy to test branch
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./_site
+          destination_branch: gh-pages-test

@@ -20,7 +20,7 @@ jobs:
 
       - name: Install Jekyll and required plugins
         run: |
-          gem install jekyll jekyll-remote-theme bundler
+          gem install jekyll jekyll-remote-theme jekyll-paginate bundler
           bundle init
           echo 'gem "jekyll"' >> Gemfile
           echo 'gem "jekyll-remote-theme"' >> Gemfile

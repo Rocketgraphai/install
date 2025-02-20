@@ -19,7 +19,7 @@ jobs:
           bundler-cache: true
 
       - name: Install Jekyll dependencies
-        run: gem install jekyll
+        run: gem install jekyll jekyll-remote-theme
 
       - name: Build Jekyll site
         run: jekyll build

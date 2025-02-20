@@ -26,7 +26,7 @@ bash install.sh
 
 For Windows:
 ```powershell
-powershell -ExecutionPolicy Bypass -File install.ps1
+powershell -ep Bypass -f install.ps1
 ```
 
 **Cybersecurity Reminder:** It is always a good practice to review the contents of any script before running it. This ensures that you understand what the script does and helps maintain the security and integrity of your system. For commercial-quality applications, following this practice is essential to prevent potential security risks.

@@ -22,7 +22,7 @@ jobs:
         run: gem install jekyll
 
       - name: Build Jekyll site
-        run: bundle exec jekyll build
+        run: jekyll build
 
       - name: Test deployment (dry run)
         run: |

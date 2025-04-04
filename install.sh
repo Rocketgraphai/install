@@ -319,8 +319,13 @@ main() {
     else
       log_info "Mission Control is now running at http://localhost:${MC_PORT}"
     fi
-    log_info "To check the status, run: docker compose ps"
-    log_info "To view logs, run: docker compose logs"
+    if [ $(uname -m) == "ppc64le" ]; then
+        log_info "To check the status, run: podman-compose ps"
+        log_info "To view logs, run: podman-compose logs"
+    else
+        log_info "To check the status, run: docker compose ps"
+        log_info "To view logs, run: docker compose logs"
+    fi
 }
 
 # Run main function.

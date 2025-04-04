@@ -66,7 +66,7 @@ run_with_timeout() {
 }
 
 # Check system requirements.
-check_requirements() {
+check_requirements_docker() {
     log_info "Checking system requirements."
 
     # Check if Docker is installed.
@@ -94,6 +94,47 @@ check_requirements() {
     compose_version=$(echo "$compose_version" | sed 's/[^0-9.]*//g')
     if ! version_ge "$MIN_COMPOSE_VERSION" "$compose_version"; then
         log_error "Docker Compose version $compose_version is too old. Please install Docker Compose version $MIN_COMPOSE_VERSION or higher."
+        exit 1
+    fi
+
+    # Check curl.
+    if ! command_exists curl; then
+        log_error "curl is not installed. Please install curl first."
+        exit 1
+    fi
+
+    # Check for sufficient disk space (at least 1GB free).
+    if [ "$(df -P . | awk 'NR==2 {print $4}')" -lt 1048576 ]; then
+        log_error "Insufficient disk space. Please ensure at least 1GB of free space."
+        exit 1
+    fi
+
+    # Check network connectivity.
+    if ! curl -s --head --request GET ${DOWNLOAD_URL} | grep "200" >/dev/null; then
+        log_error "Network connectivity issue. Unable to reach ${DOWNLOAD_URL}."
+        exit 1
+    fi
+}
+
+# Check system requirements.
+check_requirements_podman() {
+    log_info "Checking system requirements."
+
+    # Check if podman is installed.
+    if ! command_exists podman; then
+        log_error "podman is not installed. Please install podman first."
+        exit 1
+    fi
+
+    # Check that podman is running and the user has permissions to use it.
+    if ! run_with_timeout 10 "podman ps"; then
+        log_error "podman is either not running or this user doesn't have permission to use Docker. Make sure podman is started. If podman is running, it is likely the user doesn't have permission to use podman. Either run the script as root or contact your system administrator."
+        exit 1
+    fi
+
+    # Check if podman compose is installed.
+    if ! run_with_timeout 10 "podman-compose version"; then
+        log_error "podman is installed but compose is not. Please install podman-compose first."
         exit 1
     fi
 
@@ -184,13 +225,6 @@ set_variables() {
     fi
 }
 
-# If on PowerPC and a mongodb image is not requested, set it.
-set_ppc_mongodb() {
-    if [ $(uname -m) == "ppc64le" ] && ! grep -q '^MC_MONGODB_IMAGE=' .env; then
-        export MC_MONGODB_IMAGE="ibmcom/mongodb-ppc64le:latest"
-    fi
-}
-
 # Check for port conflicts.
 check_ports() {
     log_info "Checking for port conflicts."
@@ -209,7 +243,7 @@ check_ports() {
 }
 
 # Pull and start containers.
-deploy_containers() {
+deploy_containers_docker() {
     log_info "Pulling latest container images."
     if ! output=$(run_with_timeout 300 docker compose pull 2>&1); then
         log_error "Failed to pull container images. Error: $output"
@@ -223,17 +257,61 @@ deploy_containers() {
     fi
 }
 
+# Pull and start containers.
+deploy_containers_podman() {
+    log_info "Pulling latest container images."
+    # Set the MongoDB image for Power architecture
+    export MC_MONGODB_IMAGE=ibmcom/mongodb-ppc64le
+
+    # Ensure volume exists
+    if ! podman volume inspect rocketgraph_mongodb-data >/dev/null 2>&1; then
+        log_info "Creating MongoDB volume..."
+        podman volume create rocketgraph_mongodb-data
+    fi
+
+    # Fix permissions on the volume for MongoDB
+    log_info "Setting correct permissions on MongoDB volume..."
+    podman unshare chown -R 999:999 "$(podman volume inspect rocketgraph_mongodb-data -f '{{.Mountpoint}}')"
+
+    # Check if there are existing containers that need to be removed
+    if podman ps -a --format "{{.Names}}" | grep -q "rocketgraph_"; then
+        log_info "Removing existing Rocketgraph containers..."
+        podman-compose down
+    fi
+    # Start the services
+    log_info "Starting Rocketgraph services with Podman..."
+    # podman-compose up -d
+    podman-compose up -d mongodb
+    sleep 3
+    podman-compose up -d backend
+    sleep 5
+    podman-compose up -d xgt
+    sleep 3
+    podman-compose up -d frontend
+
+    # Allow user to log off and keep containers running
+    loginctl enable-linger
+    log_info "Rocketgraph startup complete. Check status with: podman-compose ps"
+}
+
 # Main installation process.
 main() {
     log_info "Starting installation process."
 
-    check_requirements
+    if [ $(uname -m) == "ppc64le" ]; then
+        check_requirements_podman
+    else
+        check_requirements_docker
+    fi
     check_installation_dir
     download_config
     set_variables
-    set_ppc_mongodb
     check_ports
-    deploy_containers
+    if [ $(uname -m) == "ppc64le" ]; then
+        deploy_containers_podman
+    else
+        deploy_containers_docker
+    fi
 
     log_info "Installation completed successfully!"
     if [ "$USE_SSL" -eq 1 ]; then

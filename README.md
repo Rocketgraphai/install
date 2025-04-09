@@ -84,6 +84,9 @@ bash install.sh
 # Or with custom ports:
 bash install.sh --http-port 8080 --https-port 8443 --xgt-port 4368
 ```
+
+[📟 Launch Terminal Here](x-terminal-emulator://)
+
 #### Windows:
 ```powershell
 powershell -ep Bypass -f install.ps1

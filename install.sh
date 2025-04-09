@@ -12,6 +12,58 @@ DEFAULT_PORT=80
 DEFAULT_SSL_PORT=443
 DEFAULT_XGT_PORT=4367
 
+# Initialize variables with default values
+MC_PORT=$DEFAULT_PORT
+MC_SSL_PORT=$DEFAULT_SSL_PORT
+MC_XGT_PORT=$DEFAULT_XGT_PORT
+
+# Parse command line options
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --http-port)
+      if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
+        MC_PORT=$2
+        shift 2
+      else
+        log_error "Error: Argument for $1 is missing"
+        exit 1
+      fi
+      ;;
+    --https-port)
+      if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
+        MC_SSL_PORT=$2
+        shift 2
+      else
+        log_error "Error: Argument for $1 is missing"
+        exit 1
+      fi
+      ;;
+    --xgt-port)
+      if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
+        MC_XGT_PORT=$2
+        shift 2
+      else
+        log_error "Error: Argument for $1 is missing"
+        exit 1
+      fi
+      ;;
+    -h|--help)
+      echo "Usage: $0 [OPTIONS]"
+      echo "Available options:"
+      echo "  --http-port PORT   Specify custom HTTP port (default: $DEFAULT_PORT)"
+      echo "  --https-port PORT  Specify custom HTTPS port (default: $DEFAULT_SSL_PORT)"
+      echo "  --xgt-port PORT    Specify custom XGT port (default: $DEFAULT_XGT_PORT)"
+      echo "  -h, --help         Show this help message"
+      exit 0
+      ;;
+    *)
+      log_error "Unknown option: $1"
+      echo "Use -h or --help to see available options"
+      exit 1
+      ;;
+  esac
+done
+
 # Minimum required Docker Compose version.
 MIN_COMPOSE_VERSION="1.29.0"
 
@@ -21,6 +73,20 @@ DOWNLOAD_URL="https://github.com/Rocketgraphai/rocketgraph"
 log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+
+portable_sed_i() {
+  # Usage: portable_sed_i 's|pattern|replacement|' filename
+  local expr="$1"
+  local file="$2"
+
+  if sed --version >/dev/null 2>&1; then
+    # GNU sed
+    sed -i "$expr" "$file"
+  else
+    # BSD sed (macOS)
+    sed -i '' "$expr" "$file"
+  fi
+}
 
 # Function to check if a command exists.
 command_exists() {
@@ -202,19 +268,22 @@ download_config() {
 set_variables() {
     log_info "Reading needed values from .env file."
 
-    MC_PORT="$DEFAULT_PORT"
-    if grep -q '^MC_PORT=' .env; then
-        MC_PORT=$(grep -E '^MC_PORT=' .env | cut -d'=' -f2-)
+    if grep -q '^#MC_PORT=' .env && [ "$MC_PORT" != "$DEFAULT_PORT" ]; then
+        log_info "Using non-standard MC_PORT=${MC_PORT}"
+        portable_sed_i "s|^#MC_PORT=${DEFAULT_PORT}|MC_PORT=${MC_PORT}|" .env
     fi
 
-    MC_SSL_PORT="$DEFAULT_SSL_PORT"
-    if grep -q '^MC_SSL_PORT=' .env; then
-        MC_SSL_PORT=$(grep -E '^MC_SSL_PORT=' .env | cut -d'=' -f2-)
+    if grep -q '^#MC_SSL_PORT=' .env && [ "$MC_SSL_PORT" != "$DEFAULT_SSL_PORT" ]; then
+        log_info "Using non-standard MC_SSL_PORT=${MC_SSL_PORT}"
+        # MC_SSL_PORT=$(grep -E '^MC_SSL_PORT=' .env | cut -d'=' -f2-)
+        portable_sed_i "s|^#MC_SSL_PORT=${DEFAULT_SSL_PORT}|MC_SSL_PORT=${MC_SSL_PORT}|" .env
     fi
 
-    MC_DEFAULT_XGT_PORT="$DEFAULT_XGT_PORT"
-    if grep -q '^MC_DEFAULT_XGT_PORT=' .env; then
-        MC_DEFAULT_XGT_PORT=$(grep -E '^MC_DEFAULT_XGT_PORT=' .env | cut -d'=' -f2-)
+#   MC_DEFAULT_XGT_PORT="$DEFAULT_XGT_PORT"
+    if grep -q '^#MC_XGT_PORT=' .env && [ "$MC_XGT_PORT" != "$DEFAULT_XGT_PORT" ]; then
+        log_info "Using non-standard MC_XGT_PORT=${MC_XGT_PORT}"
+        # MC_XGT_PORT=$(grep -E '^MC_XGT_PORT=' .env | cut -d'=' -f2-)
+        portable_sed_i "s|^#MC_XGT_PORT=${DEFAULT_XGT_PORT}|MC_XGT_PORT=${MC_XGT_PORT}|" .env
     fi
 
     # Determine if SSL is being used to serve Mission Control.
@@ -259,9 +328,15 @@ deploy_containers_docker() {
 
 # Pull and start containers.
 deploy_containers_podman() {
-    log_info "Pulling latest container images."
     # Set the MongoDB image for Power architecture
     export MC_MONGODB_IMAGE=ibmcom/mongodb-ppc64le
+    portable_sed_i 's|^#MC_MONGODB_IMAGE=mongo:latest|MC_MONGODB_IMAGE=ibmcom/mongodb-ppc64le|' .env
+
+    log_info "Pulling latest container images."
+    if ! output=$(run_with_timeout 300 podman-compose pull 2>&1); then
+        log_error "Failed to pull container images. Error: $output"
+        exit 1
+    fi
 
     # Ensure volume exists
     if ! podman volume inspect rocketgraph_mongodb-data >/dev/null 2>&1; then
@@ -276,7 +351,7 @@ deploy_containers_podman() {
     # Check if there are existing containers that need to be removed
     if podman ps -a --format "{{.Names}}" | grep -q "rocketgraph_"; then
         log_info "Removing existing Rocketgraph containers..."
-        podman-compose down
+        podman-compose down >/dev/null 2>&1
     fi
     # Start the services
     log_info "Starting Rocketgraph services with Podman..."

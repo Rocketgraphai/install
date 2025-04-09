@@ -8,21 +8,21 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color.
 
 # Default ports.
-DEFAULT_PORT=80
-DEFAULT_SSL_PORT=443
+DEFAULT_HTTP_PORT=80
+DEFAULT_HTTPS_PORT=443
 DEFAULT_XGT_PORT=4367
 
 # Initialize variables with default values
-MC_PORT=$DEFAULT_PORT
-MC_SSL_PORT=$DEFAULT_SSL_PORT
-MC_XGT_PORT=$DEFAULT_XGT_PORT
+HTTP_PORT=$DEFAULT_HTTP_PORT
+HTTPS_PORT=$DEFAULT_HTTPS_PORT
+XGT_PORT=$DEFAULT_XGT_PORT
 
 # Parse command line options
 while [ $# -gt 0 ]; do
   case "$1" in
     --http-port)
       if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
-        MC_PORT=$2
+        HTTP_PORT=$2
         shift 2
       else
         log_error "Error: Argument for $1 is missing"
@@ -31,7 +31,7 @@ while [ $# -gt 0 ]; do
       ;;
     --https-port)
       if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
-        MC_SSL_PORT=$2
+        HTTPS_PORT=$2
         shift 2
       else
         log_error "Error: Argument for $1 is missing"
@@ -40,7 +40,7 @@ while [ $# -gt 0 ]; do
       ;;
     --xgt-port)
       if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
-        MC_XGT_PORT=$2
+        XGT_PORT=$2
         shift 2
       else
         log_error "Error: Argument for $1 is missing"
@@ -50,8 +50,8 @@ while [ $# -gt 0 ]; do
     -h|--help)
       echo "Usage: $0 [OPTIONS]"
       echo "Available options:"
-      echo "  --http-port PORT   Specify custom HTTP port (default: $DEFAULT_PORT)"
-      echo "  --https-port PORT  Specify custom HTTPS port (default: $DEFAULT_SSL_PORT)"
+      echo "  --http-port PORT   Specify custom HTTP port (default: $DEFAULT_HTTP_PORT)"
+      echo "  --https-port PORT  Specify custom HTTPS port (default: $DEFAULT_HTTPS_PORT)"
       echo "  --xgt-port PORT    Specify custom XGT port (default: $DEFAULT_XGT_PORT)"
       echo "  -h, --help         Show this help message"
       exit 0
@@ -232,6 +232,13 @@ check_installation_dir() {
         log_error "Write permissions required in ${install_dir}".
         exit 1
     fi
+
+    # Check if .env file already exists
+    if [ -f .env ]; then
+        log_error "A .env file already exists. Installation aborted."
+        log_error "Please remove or rename the .env file or go to a different directory if you want to reinstall."
+        exit 1
+    fi
 }
 
 # Download config files.
@@ -247,14 +254,9 @@ download_config() {
     fi
 
     # Download env.template.
-    if ! curl -sSL "${url}/env.template" -o env.template; then
-        log_warn "Failed to download env.template."
-    fi
-
-    # Copy env.template to .env if .env doesn't exist.
-    if [ ! -f .env ]; then
-        log_info "Creating .env file from env.template."
-        cp env.template .env
+    if ! curl -sSL "${url}/env.template" -o .env; then
+        log_warn "Failed to download a .env file."
+        exit 1
     fi
 
     # Set appropriate permissions.
@@ -266,24 +268,21 @@ download_config() {
 # .env file or a default value.  Note that these variables do NOT affect the
 # docker containers.  They get their values strictly from the .env file.
 set_variables() {
-    log_info "Reading needed values from .env file."
+    log_info "Setting up .env configuration file."
 
-    if grep -q '^#MC_PORT=' .env && [ "$MC_PORT" != "$DEFAULT_PORT" ]; then
-        log_info "Using non-standard MC_PORT=${MC_PORT}"
-        portable_sed_i "s|^#MC_PORT=${DEFAULT_PORT}|MC_PORT=${MC_PORT}|" .env
+    if grep -q '^#MC_PORT=' .env && [ "$HTTP_PORT" != "$DEFAULT_HTTP_PORT" ]; then
+        log_info "Using non-standard HTTP_PORT=${HTTP_PORT}"
+        portable_sed_i "s|^#MC_PORT=${DEFAULT_HTTP_PORT}|MC_PORT=${HTTP_PORT}|" .env
     fi
 
-    if grep -q '^#MC_SSL_PORT=' .env && [ "$MC_SSL_PORT" != "$DEFAULT_SSL_PORT" ]; then
-        log_info "Using non-standard MC_SSL_PORT=${MC_SSL_PORT}"
-        # MC_SSL_PORT=$(grep -E '^MC_SSL_PORT=' .env | cut -d'=' -f2-)
-        portable_sed_i "s|^#MC_SSL_PORT=${DEFAULT_SSL_PORT}|MC_SSL_PORT=${MC_SSL_PORT}|" .env
+    if grep -q '^#MC_SSL_PORT=' .env && [ "$HTTPS_PORT" != "$DEFAULT_HTTPS_PORT" ]; then
+        log_info "Using non-standard HTTPS_PORT=${HTTPS_PORT}"
+        portable_sed_i "s|^#MC_SSL_PORT=${DEFAULT_HTTPS_PORT}|MC_SSL_PORT=${HTTPS_PORT}|" .env
     fi
 
-#   MC_DEFAULT_XGT_PORT="$DEFAULT_XGT_PORT"
-    if grep -q '^#MC_XGT_PORT=' .env && [ "$MC_XGT_PORT" != "$DEFAULT_XGT_PORT" ]; then
-        log_info "Using non-standard MC_XGT_PORT=${MC_XGT_PORT}"
-        # MC_XGT_PORT=$(grep -E '^MC_XGT_PORT=' .env | cut -d'=' -f2-)
-        portable_sed_i "s|^#MC_XGT_PORT=${DEFAULT_XGT_PORT}|MC_XGT_PORT=${MC_XGT_PORT}|" .env
+    if grep -q '^#MC_XGT_PORT=' .env && [ "$XGT_PORT" != "$DEFAULT_XGT_PORT" ]; then
+        log_info "Using non-standard XGT_PORT=${XGT_PORT}"
+        portable_sed_i "s|^#MC_XGT_PORT=${DEFAULT_XGT_PORT}|MC_XGT_PORT=${XGT_PORT}|" .env
     fi
 
     # Determine if SSL is being used to serve Mission Control.
@@ -298,14 +297,15 @@ set_variables() {
 check_ports() {
     log_info "Checking for port conflicts."
 
-    ports_to_check="${MC_PORT} ${MC_DEFAULT_XGT_PORT}"
+    ports_to_check="${HTTP_PORT} ${MC_DEFAULT_XGT_PORT}"
     if [ "$USE_SSL" -eq 1 ]; then
-        ports_to_check="${ports_to_check} ${MC_SSL_PORT}"
+        ports_to_check="${ports_to_check} ${HTTPS_PORT}"
     fi
 
     for port in ${ports_to_check}; do
         if port_in_use "$port"; then
             log_warn "Port $port is already in use. Please stop the existing service or specify a different port."
+            log_warn "To specify a different port, see the --http-port, --https-port, and --xgt-port options in the Installation help."
             exit 1
         fi
     done
@@ -390,9 +390,9 @@ main() {
 
     log_info "Installation completed successfully!"
     if [ "$USE_SSL" -eq 1 ]; then
-      log_info "Mission Control is now running at https://localhost:${MC_SSL_PORT}"
+      log_info "Mission Control is now running at https://localhost:${HTTPS_PORT}"
     else
-      log_info "Mission Control is now running at http://localhost:${MC_PORT}"
+      log_info "Mission Control is now running at http://localhost:${HTTP_PORT}"
     fi
     if [ $(uname -m) == "ppc64le" ]; then
         log_info "To check the status, run: podman-compose ps"

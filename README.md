@@ -16,6 +16,25 @@ curl -sSL https://install.rocketgraph.com/install.sh | sh
 powershell -ep Bypass -c "iex (iwr -useb 'https://install.rocketgraph.com/install.ps1')"
 ```
 
+### Opening a Terminal/Shell
+
+Before running the installation commands, you'll need to open a terminal or command prompt:
+
+Windows:
+
+ - PowerShell: Right-click on the Start button and select "Windows PowerShell" or "Windows Terminal" (on newer Windows versions)
+ - Or press Win + X and select "Windows PowerShell" or "Terminal"
+
+macOS:
+
+ - Open the "Terminal" app (located in Applications > Utilities > Terminal)
+ - Or use Spotlight Search (press `Cmd + Space`) and type "Terminal"
+
+Linux:
+
+ - Most Linux distributions: Press `Ctrl + Alt + T`
+ - Or search for "Terminal" in your desktop environment's application menu
+
 ### Prerequisites
 
 These scripts **require** a container platform:

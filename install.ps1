@@ -117,8 +117,25 @@ if ($isWindowsPlat) {
 }
 if (-not $isAdmin) {
     if ($isWindowsPlat) {
+        # Determine script content source
         $scriptPath = $MyInvocation.MyCommand.Path
-        Start-Process powershell.exe "-ExecutionPolicy Bypass -File `"$scriptPath`"" -Verb RunAs
+        if (-not $scriptPath) {
+            # Script was run via iex/iwr, so re-download it manually
+            $response = Invoke-WebRequest -Uri 'https://install.rocketgraph.com/install.ps1' -UseBasicParsing
+            $reader = New-Object System.IO.StreamReader($response.RawContentStream)
+            $scriptContent = $reader.ReadToEnd()
+            $reader.Close()
+        } else {
+            $scriptContent = Get-Content -Raw -Path $scriptPath
+        }
+
+
+        #Write-InfoLog $scriptContent
+        # Save to temp file and elevate
+        $tempFile = [IO.Path]::Combine($env:TEMP, "rocketgraph_installer.ps1")
+        Set-Content -Path $tempFile -Value $scriptContent -Encoding UTF8 > $null  # <== suppress output
+
+        Start-Process powershell "-ExecutionPolicy Bypass -File `"$tempFile`"" -Verb RunAs
         exit
     } else {
         Write-ErrorLog "This script must be run as Administrator"

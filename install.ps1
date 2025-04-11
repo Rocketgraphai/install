@@ -424,11 +424,15 @@ function Start-Installation {
         Write-InfoLog "Launching browser..."
         Start-Process "http://localhost:$HTTP_PORT"
     }
-    if ($PAUSE_AT_END) {
+}
 
+try {
+    # Run main function
+    Start-Installation
+} catch {
+    Write-Error "Script error: $_"
+} finally {
+    if ($PAUSE_AT_END) {
         Read-Host "Press Enter to exit..."
     }
 }
-
-# Run main function
-Start-Installation

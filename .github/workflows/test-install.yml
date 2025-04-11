@@ -56,7 +56,7 @@ jobs:
       - name: Run install.sh in powershell
         if: runner.os == 'Linux'
         run: |
-          sudo pwsh ./install.ps1
+          sudo pwsh ./install.ps1 --no-browser --no-pause
 
       - name: Run install.sh
         run: |

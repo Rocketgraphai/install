@@ -64,5 +64,6 @@ jobs:
         run: |
           set +e
           sudo docker compose down
+          rm -f .env
           set -e
           cat ./install.sh | sudo sh

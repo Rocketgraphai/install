@@ -22,8 +22,8 @@ Before running the installation commands, you'll need to open a terminal or comm
 
 Windows:
 
- - PowerShell: Right-click on the Start button and select "Windows PowerShell" or "Windows Terminal" (on newer Windows versions)
- - Or press Win + X and select "Windows PowerShell" or "Terminal"
+ - PowerShell: Right-click on the Start button and select "Terminal"
+ - Or press Win + X and select "Terminal"
 
 macOS:
 
@@ -58,10 +58,9 @@ If you need to specify custom ports, you can pass them as parameters to the inst
 # Available options:
 #   --http-port PORT   Specify custom HTTP port (default: 80)
 #   --https-port PORT  Specify custom HTTPS port (default: 443)
-#   --xgt-port PORT    Specify custom XGT port (default: 4367)
 
 # Example with custom ports:
-curl -sSL https://install.rocketgraph.com/install.sh | sh -s -- --http-port 8080 --https-port 8443 --xgt-port 4368
+curl -sSL https://install.rocketgraph.com/install.sh | sh -s -- --http-port 8080 --https-port 8443
 ```
 
 All parameters are optional. If you specify only the HTTP port, the others will use their defaults.
@@ -101,7 +100,7 @@ Alternatively, you can manually download and run the installation scripts.
 ```bash
 bash install.sh
 # Or with custom ports:
-bash install.sh --http-port 8080 --https-port 8443 --xgt-port 4368
+bash install.sh --http-port 8080 --https-port 8443
 ```
 
 #### Windows:

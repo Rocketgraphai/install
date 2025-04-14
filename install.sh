@@ -10,12 +10,10 @@ NC='\033[0m' # No Color.
 # Default ports.
 DEFAULT_HTTP_PORT=80
 DEFAULT_HTTPS_PORT=443
-DEFAULT_XGT_PORT=4367
 
 # Initialize variables with default values
 HTTP_PORT=$DEFAULT_HTTP_PORT
 HTTPS_PORT=$DEFAULT_HTTPS_PORT
-XGT_PORT=$DEFAULT_XGT_PORT
 
 # Parse command line options
 while [ $# -gt 0 ]; do
@@ -38,21 +36,11 @@ while [ $# -gt 0 ]; do
         exit 1
       fi
       ;;
-    --xgt-port)
-      if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
-        XGT_PORT=$2
-        shift 2
-      else
-        log_error "Error: Argument for $1 is missing"
-        exit 1
-      fi
-      ;;
     -h|--help)
       echo "Usage: $0 [OPTIONS]"
       echo "Available options:"
       echo "  --http-port PORT   Specify custom HTTP port (default: $DEFAULT_HTTP_PORT)"
       echo "  --https-port PORT  Specify custom HTTPS port (default: $DEFAULT_HTTPS_PORT)"
-      echo "  --xgt-port PORT    Specify custom XGT port (default: $DEFAULT_XGT_PORT)"
       echo "  -h, --help         Show this help message"
       exit 0
       ;;
@@ -194,7 +182,7 @@ check_requirements_podman() {
 
     # Check that podman is running and the user has permissions to use it.
     if ! run_with_timeout 10 "podman ps"; then
-        log_error "podman is either not running or this user doesn't have permission to use Docker. Make sure podman is started. If podman is running, it is likely the user doesn't have permission to use podman. Either run the script as root or contact your system administrator."
+        log_error "podman is either not running or this user doesn't have permission to use podman. Make sure podman is started. If podman is running, it is likely the user doesn't have permission to use podman. Either run the script as root or contact your system administrator."
         exit 1
     fi
 
@@ -280,11 +268,6 @@ set_variables() {
         portable_sed_i "s|^#MC_SSL_PORT=${DEFAULT_HTTPS_PORT}|MC_SSL_PORT=${HTTPS_PORT}|" .env
     fi
 
-    if grep -q '^#MC_XGT_PORT=' .env && [ "$XGT_PORT" != "$DEFAULT_XGT_PORT" ]; then
-        log_info "Using non-standard XGT_PORT=${XGT_PORT}"
-        portable_sed_i "s|^#MC_XGT_PORT=${DEFAULT_XGT_PORT}|MC_XGT_PORT=${XGT_PORT}|" .env
-    fi
-
     # Determine if SSL is being used to serve Mission Control.
     USE_SSL=0
     if grep -q '^MC_SSL_PUBLIC_CERT=' .env &&
@@ -297,7 +280,7 @@ set_variables() {
 check_ports() {
     log_info "Checking for port conflicts."
 
-    ports_to_check="${HTTP_PORT} ${MC_DEFAULT_XGT_PORT}"
+    ports_to_check="${HTTP_PORT}"
     if [ "$USE_SSL" -eq 1 ]; then
         ports_to_check="${ports_to_check} ${HTTPS_PORT}"
     fi

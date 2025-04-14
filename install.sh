@@ -356,7 +356,7 @@ deploy_containers_podman() {
 main() {
     log_info "Starting installation process."
 
-    if [ $(uname -m) == "ppc64le" ]; then
+    if [ $(uname -m) = "ppc64le" ]; then
         check_requirements_podman
     else
         check_requirements_docker
@@ -365,7 +365,7 @@ main() {
     download_config
     set_variables
     check_ports
-    if [ $(uname -m) == "ppc64le" ]; then
+    if [ $(uname -m) = "ppc64le" ]; then
         deploy_containers_podman
     else
         deploy_containers_docker
@@ -377,7 +377,7 @@ main() {
     else
       log_info "Mission Control is now running at http://localhost:${HTTP_PORT}"
     fi
-    if [ $(uname -m) == "ppc64le" ]; then
+    if [ $(uname -m) = "ppc64le" ]; then
         log_info "To check the status, run: podman-compose ps"
         log_info "To view logs, run: podman-compose logs"
     else

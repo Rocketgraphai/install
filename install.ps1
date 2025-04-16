@@ -4,11 +4,13 @@
 $DEFAULT_HTTP_PORT = 80
 $DEFAULT_HTTPS_PORT = 443
 $DEFAULT_XGT_PORT = 4367
+$DEFAULT_INSTALL_DIR = Get-Location
 
 # Initialize variables with default values
 $HTTP_PORT = $DEFAULT_HTTP_PORT
 $HTTPS_PORT = $DEFAULT_HTTPS_PORT
 $XGT_PORT = $DEFAULT_XGT_PORT
+$INSTALL_DIR = $DEFAULT_INSTALL_DIR
 
 # Minimum required Docker Compose version
 $MIN_COMPOSE_VERSION = "1.29.0"
@@ -19,16 +21,21 @@ $PAUSE_AT_END = $true
 # Launch browser on success
 $LAUNCH_BROWSER = $true
 
+# Install docker if it's not installed'
+$INSTALL_DOCKER = $true
+
 # Function to display help
 function Show-Help {
     Write-Host "Usage: install.ps1 [OPTIONS]"
     Write-Host "Available options:"
-    Write-Host "  --http-port PORT   Specify custom HTTP port (default: $DEFAULT_HTTP_PORT)"
-    Write-Host "  --https-port PORT  Specify custom HTTPS port (default: $DEFAULT_HTTPS_PORT)"
+    Write-Host "  --http-port PORT    Specify custom HTTP port (default: $DEFAULT_HTTP_PORT)"
+    Write-Host "  --https-port PORT   Specify custom HTTPS port (default: $DEFAULT_HTTPS_PORT)"
+    Write-Host "  --install-dir DIR   Specify custom install location (default: $DEFAULT_INSTALL_DIR)"
     #Write-Host "  --xgt-port PORT    Specify custom XGT port (default: $DEFAULT_XGT_PORT)"
-    Write-Host "  --no-browser       Do not launch the browser after setup"
-    Write-Host "  --no-pause         Do not wait for input at the end"
-    Write-Host "  -h, --help         Show this help message"
+    Write-Host "  --no-docker         Do not install docker if it's missing"
+    Write-Host "  --no-browser        Do not launch the browser after setup"
+    Write-Host "  --no-pause          Do not wait for input at the end"
+    Write-Host "  -h, --help          Show this help message"
 }
 
 # Parse command-line arguments
@@ -61,6 +68,15 @@ for ($i = 0; $i -lt $args.Count; $i++) {
                 exit 1
             }
         }#>
+        '--install-dir' {
+            if ($i + 1 -lt $args.Count -and $args[$i + 1] -notmatch '^-') {
+                $INSTALL_DIR = $args[$i + 1]
+                $i++
+            } else {
+                Write-Error "Error: Argument for --install-dir is missing"
+                exit 1
+            }
+        }
         '-h' {
             Show-Help
             exit 0
@@ -68,6 +84,9 @@ for ($i = 0; $i -lt $args.Count; $i++) {
         '--help' {
             Show-Help
             exit 0
+        }
+        '--no-docker' {
+            $INSTALL_DOCKER = $false
         }
         '--no-browser' {
             $LAUNCH_BROWSER = $false
@@ -168,18 +187,42 @@ function Test-VersionGreaterOrEqual {
     return ([System.Version]$Version1 -ge [System.Version]$Version2)
 }
 
+function Enable-WSL2 {
+    Write-InfoLog "Enabling WSL and Virtual Machine Platform..."
+
+    Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux -NoRestart -All > $null 2>&1
+    Enable-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform -NoRestart -All > $null 2>&1
+
+    # Set WSL2 as default version
+    wsl --set-default-version 2 > $null 2>&1
+}
+
 function Install-Docker {
+    Enable-WSL2
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     $url = "https://desktop.docker.com/win/main/amd64/Docker Desktop Installer.exe"
     $dockerInstaller = "$env:TEMP\DockerDesktopInstaller.exe"
     Write-InfoLog "Downloading Docker Desktop..."
     $wc = New-Object System.Net.WebClient
     $wc.DownloadFile($url, $dockerInstaller)
-    #$dockerInstaller = "$env:TEMP\DockerDesktopInstaller.exe"
-    #$url = "https://desktop.docker.com/win/main/amd64/Docker Desktop Installer.exe"
-    #Invoke-WebRequest -Uri $url -OutFile $dockerInstaller
-    Write-InfoLog "Installing Docker Desktop..."
+    Write-InfoLog "Installing Docker Desktop (may require reboot)..."
     Start-Process -FilePath $dockerInstaller -ArgumentList "install" -Wait
+    # Refresh environment variables from registry
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
+                [System.Environment]::GetEnvironmentVariable("Path", "User")
+}
+
+function Is-RebootPending {
+    try {
+        $baseKey = [Microsoft.Win32.RegistryKey]::OpenBaseKey(
+            [Microsoft.Win32.RegistryHive]::LocalMachine,
+            [Microsoft.Win32.RegistryView]::Registry64
+        )
+        $subKey = $baseKey.OpenSubKey("SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending")
+        return $subKey -ne $null
+    } catch {
+        return $false
+    }
 }
 
 function Ensure-WSL2 {
@@ -196,26 +239,31 @@ function Ensure-WSL2 {
 
     if ($wslFeature.State -ne "Enabled") {
         Write-InfoLog "Enabling WSL feature..."
-        Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux -NoRestart
+        Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux -NoRestart > $null 2>&1
         $needsEnable = $true
     }
 
     if ($vmFeature.State -ne "Enabled") {
         Write-InfoLog "Enabling VirtualMachinePlatform for WSL2..."
-        Enable-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform -NoRestart
+        Enable-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform -NoRestart > $null 2>&1
         $needsEnable = $true
     }
 
-    if ($needsEnable) {
-        Write-InfoLog "Features were enabled. Please restart your system to complete WSL2 installation."
+    try {
+        wsl --set-default-version 2 > $null 2>&1
+        Write-InfoLog "WSL2 set as the default version."
+    } catch {
+        Write-ErrorLog "Failed to set WSL2 as default. Try restarting or check WSL installation status."
         return $false
     }
 
-    try {
-        wsl --set-default-version 2 2>$null
-        Write-InfoLog "WSL2 set as the default version."
-    } catch {
-        Write-InfoLog "Failed to set WSL2 as default. Try restarting or check WSL installation status."
+    if ($needsEnable) {
+        Write-ErrorLog "Features were enabled. Please restart your system to complete WSL2 installation."
+        return $false
+    }
+
+    if (Is-RebootPending) {
+        Write-ErrorLog  "A system reboot is required to complete the WSL2 or Docker setup."
         return $false
     }
 
@@ -226,13 +274,9 @@ function Ensure-WSL2 {
 function Test-Requirements {
     Write-InfoLog "Checking system requirements..."
 
-    if ($isWindowsPlat) {
-        #Ensure-WSL2
-    }
-
     # Check Docker
     if (-not (Get-Command "docker" -ErrorAction SilentlyContinue)) {
-        if ($isWindowsPlat) {
+        if ($isWindowsPlat -and $INSTALL_DOCKER) {
             Write-InfoLog "Docker not found..."
             Install-Docker
         } else {
@@ -242,13 +286,45 @@ function Test-Requirements {
         }
     }
 
-    # Check if Docker is running (with output suppression)
-    try {
-        $null = docker version 2>$null
-    }
-    catch {
-        Write-ErrorLog "Docker is not running or not responding. Please start Docker first."
+    if ($isWindowsPlat -and (-not (Ensure-WSL2))) {
         exit 1
+    }
+
+    # Ensure Docker is running
+    Write-InfoLog "Ensuring Docker is running..."
+
+    $dockerRunning = & docker info > $null 2>&1
+
+    if ($LASTEXITCODE -ne 0) {
+        if(-not $isWindowsPlat) {
+            Write-ErrorLog "Docker not running."
+            exit 1
+        }
+
+        Write-InfoLog "Docker is not running. Attempting to start Docker Desktop..."
+
+        # Try to start Docker Desktop
+        Start-Process "C:\Program Files\Docker\Docker\Docker Desktop.exe"
+
+        # Wait for it to become responsive
+        $maxAttempts = 30
+        $attempt = 0
+        while ($attempt -lt $maxAttempts) {
+            Start-Sleep -Seconds 2
+            & docker info > $null 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                Write-InfoLog "Docker is now running."
+                break
+            }
+            $attempt++
+        }
+
+        if ($LASTEXITCODE -ne 0) {
+            Write-ErrorLog "Docker failed to start or become ready within timeout."
+            exit 1
+        }
+    } else {
+        Write-InfoLog "Docker is already running."
     }
 
     # Check Docker Compose version (with output suppression)
@@ -260,7 +336,7 @@ function Test-Requirements {
 
     # Check disk space (1GB = 1073741824 bytes)
     $drive = Get-PSDrive -Name (Get-Location).Drive.Name
-    if ($drive.Free -lt 1073741824) {
+    if ($drive.Free -lt 1GB) {
         Write-ErrorLog "Insufficient disk space. Please ensure at least 1GB of free space."
         exit 1
     }
@@ -295,16 +371,6 @@ function Test-WindowsRequirements {
         Write-ErrorLog "Windows 10 version 1903 or higher is required"
         exit 1
     }
-
-    # Check if WSL is installed (required for Home edition)
-    if ($osInfo.Caption -like "*Home*") {
-        $wsl = Get-Command wsl.exe -ErrorAction SilentlyContinue
-        if (-not $wsl) {
-            Write-ErrorLog "WSL 2 is required for Windows Home edition"
-            Write-InfoLog "Visit https://docs.microsoft.com/windows/wsl/install for installation instructions"
-            exit 1
-        }
-    }
 }
 
 # Check for port conflicts
@@ -326,8 +392,9 @@ function Test-Ports {
 
 # Create installation directory
 function Initialize-InstallationDirectory {
-    $installDir = Get-Location
-    Write-InfoLog "Using installation directory at ${installDir}..."
+    New-Item -ItemType Directory -Path $INSTALL_DIR -Force | Out-Null
+    Set-Location -Path $INSTALL_DIR
+    Write-InfoLog "Using installation directory at ${$INSTALL_DIR}..."
 }
 
 function Set-EnvVariables {
@@ -439,6 +506,20 @@ function Start-Installation {
     Write-InfoLog "To view logs, run: docker compose logs"
     if ($LAUNCH_BROWSER) {
         Write-InfoLog "Launching browser..."
+        $timeout = 30
+        $portReady = $false
+
+        for ($i = 0; $i -lt $timeout; $i++) {
+            try {
+                $tcpClient = New-Object System.Net.Sockets.TcpClient
+                $tcpClient.Connect("localhost", $HTTP_PORT)
+                $tcpClient.Close()
+                $portReady = $true
+                break
+            } catch {
+                Start-Sleep -Seconds 1
+            }
+        }
         Start-Process "http://localhost:$HTTP_PORT"
     }
 }

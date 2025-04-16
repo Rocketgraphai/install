@@ -7,18 +7,10 @@
 To download and run the installation script in a single command:
 
 ```bash
-curl -sSL https://install.rocketgraph.com/install.sh | sh
+$ curl -sSL https://install.rocketgraph.com/install.sh | sh
 ```
 
-### Windows:
-
-[Download RocketgraphInstaller.exe](https://github.com/Rocketgraphai/rocketgraph-setup/releases/latest/download/RocketgraphInstaller.exe)
-
-Just download and run the installer. It will automatically install Rocketgraph and all dependencies.
-
-### Opening a Terminal/Shell
-
-Before running the installation commands, you'll need to open a terminal or command prompt:
+Before running the installation command, you'll need to open a terminal or command prompt:
 
 macOS:
 
@@ -29,6 +21,12 @@ Linux:
 
  - Most Linux distributions: Press `Ctrl + Alt + T`
  - Or search for "Terminal" in your desktop environment's application menu
+
+### Windows:
+
+[Download RocketgraphInstaller.exe](https://github.com/Rocketgraphai/rocketgraph-setup/releases/latest/download/RocketgraphInstaller.exe)
+
+Just download and run the installer. It will automatically install Rocketgraph and all dependencies.
 
 ### Prerequisites
 
@@ -57,15 +55,16 @@ Rocketgraph **requires** a container platform:
 ### Customizing Ports (Optional)
 
 By default, Rocketgraph uses standard ports.
-If you need to specify custom ports, you can pass them as parameters to the installation script:
+If you need to specify custom ports, you can pass them as parameters to the installation script.  The available options are:
 
+| Option            | Description                              |
+|-------------------|------------------------------------------|
+| --http-port PORT  | Specify custom HTTP port (default: 80)   |
+| --https-port PORT | Specify custom HTTPS port (default: 443) |
+
+Here's an example with custom ports:
 ```bash
-# Available options:
-#   --http-port PORT   Specify custom HTTP port (default: 80)
-#   --https-port PORT  Specify custom HTTPS port (default: 443)
-
-# Example with custom ports:
-curl -sSL https://install.rocketgraph.com/install.sh | sh -s -- --http-port 8080 --https-port 8443
+$ curl -sSL https://install.rocketgraph.com/install.sh | sh -s -- --http-port 8080 --https-port 8443
 ```
 
 All parameters are optional. If you specify only the HTTP port, the others will use their defaults.
@@ -78,15 +77,15 @@ After installation, you can manage Rocketgraph services using **Docker Desktop**
 If you prefer using the command line, you can run the following commands from the installation directory (where the `.yml` file is located):
 
 ```bash
-docker compose up -d   # Start the services in the background
-docker compose down    # Stop and remove the containers
+$ docker compose up -d   # Start the services in the background
+$ docker compose down    # Stop and remove the containers
 ```
 
 For IBM Power platforms using podman:
 
 ```bash
-podman-compose up -d   # Start the services in the background
-podman-compose down    # Stop and remove the containers
+$ podman-compose up -d   # Start the services in the background
+$ podman-compose down    # Stop and remove the containers
 ```
 
 
@@ -103,9 +102,13 @@ Alternatively, you can manually download and run the installation scripts.
 ### Run:
 #### Linux / macOS:
 ```bash
-bash install.sh
-# Or with custom ports:
-bash install.sh --http-port 8080 --https-port 8443
+$ bash install.sh
+```
+
+Or with custom ports:
+
+```bash
+$ bash install.sh --http-port 8080 --https-port 8443
 ```
 
 #### Windows:

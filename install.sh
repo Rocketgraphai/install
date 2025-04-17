@@ -274,6 +274,11 @@ set_variables() {
        grep -q '^MC_SSL_PRIVATE_KEY=' .env; then
         USE_SSL=1
     fi
+
+    # Check if xgt.lic license file exists
+    if [ -f xgt.lic ]; then
+        portable_sed_i "s|^#XGT_LICENSE_FILE=/path/to/license/xgt-license.lic|XGT_LICENSE_FILE=$(pwd)/xgt.lic"
+    fi
 }
 
 # Check for port conflicts.

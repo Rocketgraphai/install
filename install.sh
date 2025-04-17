@@ -277,7 +277,8 @@ set_variables() {
 
     # Check if xgt.lic license file exists
     if [ -f xgt.lic ]; then
-        portable_sed_i "s|^#XGT_LICENSE_FILE=/path/to/license/xgt-license.lic|XGT_LICENSE_FILE=$(pwd)/xgt.lic"
+        log_info "Custom license file found."
+        portable_sed_i "s|^#XGT_LICENSE_FILE=/path/to/license/xgt-license.lic|XGT_LICENSE_FILE=$(pwd)/xgt.lic|" .env
     fi
 }
 

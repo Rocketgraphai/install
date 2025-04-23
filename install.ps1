@@ -1,16 +1,30 @@
 # install.ps1
 
+for ($i = 0; $i -lt $args.Count; $i++) {
+    switch ($args[$i]) {
+        '--start-dir' { $startDir = $args[++$i] }
+    }
+}
+
+if ($startDir -and (Test-Path $startDir)) {
+    Set-Location $startDir
+} else {
+    Write-Warning "Start directory is not set or does not exist: $startDir"
+}
+
 # Default ports
 $DEFAULT_HTTP_PORT = 80
 $DEFAULT_HTTPS_PORT = 443
 $DEFAULT_XGT_PORT = 4367
 $DEFAULT_INSTALL_DIR = Get-Location
+$DEFAULT_LICENSE_LOCATION = Join-Path $DEFAULT_INSTALL_DIR 'xgt.lic'
 
 # Initialize variables with default values
 $HTTP_PORT = $DEFAULT_HTTP_PORT
 $HTTPS_PORT = $DEFAULT_HTTPS_PORT
 $XGT_PORT = $DEFAULT_XGT_PORT
 $INSTALL_DIR = $DEFAULT_INSTALL_DIR
+$LICENSE_LOCATION = $DEFAULT_LICENSE_LOCATION
 
 # Minimum required Docker Compose version
 $MIN_COMPOSE_VERSION = "1.29.0"
@@ -31,6 +45,7 @@ function Show-Help {
     Write-Host "  --http-port PORT    Specify custom HTTP port (default: $DEFAULT_HTTP_PORT)"
     Write-Host "  --https-port PORT   Specify custom HTTPS port (default: $DEFAULT_HTTPS_PORT)"
     Write-Host "  --install-dir DIR   Specify custom install location (default: $DEFAULT_INSTALL_DIR)"
+    Write-Host "  --license-file DIR  Specify custom custom license location (default: $LICENSE_LOCATION)"
     #Write-Host "  --xgt-port PORT    Specify custom XGT port (default: $DEFAULT_XGT_PORT)"
     Write-Host "  --no-docker         Do not install docker if it's missing"
     Write-Host "  --no-browser        Do not launch the browser after setup"
@@ -77,6 +92,15 @@ for ($i = 0; $i -lt $args.Count; $i++) {
                 exit 1
             }
         }
+        '--license-file' {
+            if ($i + 1 -lt $args.Count -and $args[$i + 1] -notmatch '^-') {
+                $LICENSE_LOCATION = $args[$i + 1]
+                $i++
+            } else {
+                Write-Error "Error: Argument for --install-dir is missing"
+                exit 1
+            }
+        }
         '-h' {
             Show-Help
             exit 0
@@ -93,6 +117,10 @@ for ($i = 0; $i -lt $args.Count; $i++) {
         }
         '--no-pause' {
             $PAUSE_AT_END = $false
+        }
+        '--start-dir' {
+            $i++
+            #Ignore
         }
         default {
             Write-Error "Unknown option: $($args[$i])"
@@ -148,14 +176,17 @@ if (-not $isAdmin) {
             $scriptContent = Get-Content -Raw -Path $scriptPath
         }
 
-
-        #Write-InfoLog $scriptContent
         # Save to temp file and elevate
         $tempFile = [IO.Path]::Combine($env:TEMP, "rocketgraph_installer.ps1")
         Set-Content -Path $tempFile -Value $scriptContent -Encoding UTF8 > $null  # <== suppress output
+        $quotedArgs = $args | ForEach-Object { "`"$_`"" }
+        $quotedArgs += "`"--start-dir`""
+        $quotedArgs += "`"$DEFAULT_INSTALL_DIR`""
+        $allArgs = @("-ExecutionPolicy", "Bypass", "-File", "`"$tempFile`"") + $quotedArgs
 
-        Start-Process powershell "-ExecutionPolicy Bypass -File `"$tempFile`"" -Verb RunAs
-        exit
+        Write-InfoLog $DEFAULT_INSTALL_DIR
+        Start-Process powershell -ArgumentList $allArgs -WorkingDirectory $DEFAULT_INSTALL_DIR -Verb RunAs
+        exit 1
     } else {
         Write-ErrorLog "This script must be run as Administrator"
     }
@@ -374,8 +405,15 @@ function Test-WindowsRequirements {
 }
 
 # Check for port conflicts
-function Test-Ports {
-    Write-InfoLog "Checking for port conflicts..."
+function Test-Settings {
+    Write-InfoLog "Checking settings for issues..."
+
+    Write-InfoLog $LICENSE_LOCATION
+
+     if (-not (Test-Path $LICENSE_LOCATION) -and ($LICENSE_LOCATION -ne $DEFAULT_LICENSE_LOCATION)) {
+        Write-ErrorLog "Missing license file at: $LICENSE_LOCATION (custom path)"
+        exit 1;
+    }
 
     $portsToCheck = @(
         $HTTP_PORT,
@@ -384,7 +422,7 @@ function Test-Ports {
 
     foreach ($port in $portsToCheck) {
         if (Test-PortInUse $port) {
-            Write-WarnLog "Port $port is already in use. Please stop the existing service or specify a different port."
+            Write-ErrorLog "Port $port is already in use. Please stop the existing service or specify a different port."
             exit 1
         }
     }
@@ -398,7 +436,7 @@ function Initialize-InstallationDirectory {
 }
 
 function Set-EnvVariables {
-    Write-Host "Setting up .env configuration file..."
+    Write-InfoLog "Setting up .env configuration file..."
 
     $envFile = ".env"
 
@@ -406,18 +444,24 @@ function Set-EnvVariables {
         $envContent = Get-Content $envFile
 
         if ($envContent -match '^#MC_PORT=' -and $HTTP_PORT -ne $DEFAULT_HTTP_PORT) {
-            Write-Host "Using non-standard HTTP_PORT=$HTTP_PORT"
+            Write-InfoLog "Using non-standard HTTP_PORT=$HTTP_PORT"
             $envContent = $envContent -replace "^#MC_PORT=$DEFAULT_HTTP_PORT", "MC_PORT=$HTTP_PORT"
         }
 
         if ($envContent -match '^#MC_SSL_PORT=' -and $HTTPS_PORT -ne $DEFAULT_HTTPS_PORT) {
-            Write-Host "Using non-standard HTTPS_PORT=$HTTPS_PORT"
+            Write-InfoLog "Using non-standard HTTPS_PORT=$HTTPS_PORT"
             $envContent = $envContent -replace "^#MC_SSL_PORT=$DEFAULT_HTTPS_PORT", "MC_SSL_PORT=$HTTPS_PORT"
         }
 
         if ($envContent -match '^#MC_XGT_PORT=' -and $XGT_PORT -ne $DEFAULT_XGT_PORT) {
-            Write-Host "Using non-standard XGT_PORT=$XGT_PORT"
+            Write-InfoLog "Using non-standard XGT_PORT=$XGT_PORT"
             $envContent = $envContent -replace "^#MC_XGT_PORT=$DEFAULT_XGT_PORT", "MC_XGT_PORT=$XGT_PORT"
+        }
+
+        if ($envContent -match '^#XGT_LICENSE_FILE=' -and (Test-Path $LICENSE_LOCATION)) {
+            Write-InfoLog "Custom license file found."
+            $escapedPath = $LICENSE_LOCATION -replace '\\', '\\\\'
+            $envContent = $envContent -replace '^#XGT_LICENSE_FILE=.*', "XGT_LICENSE_FILE=`"$escapedPath`""
         }
 
         $USE_SSL = 0
@@ -495,7 +539,7 @@ function Start-Installation {
       Test-WindowsRequirements
     }
     Test-Requirements
-    Test-Ports
+    Test-Settings
     Initialize-InstallationDirectory
     Get-ConfigurationFiles
     Start-Containers

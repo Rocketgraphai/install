@@ -45,7 +45,7 @@ function Show-Help {
     Write-Host "  --http-port PORT    Specify custom HTTP port (default: $DEFAULT_HTTP_PORT)"
     Write-Host "  --https-port PORT   Specify custom HTTPS port (default: $DEFAULT_HTTPS_PORT)"
     Write-Host "  --install-dir DIR   Specify custom install location (default: $DEFAULT_INSTALL_DIR)"
-    Write-Host "  --license-file DIR  Specify custom custom license location (default: $LICENSE_LOCATION)"
+    Write-Host "  --license-file DIR  Specify custom license location (default: $LICENSE_LOCATION)"
     #Write-Host "  --xgt-port PORT    Specify custom XGT port (default: $DEFAULT_XGT_PORT)"
     Write-Host "  --no-docker         Do not install docker if it's missing"
     Write-Host "  --no-browser        Do not launch the browser after setup"

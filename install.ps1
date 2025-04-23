@@ -8,7 +8,7 @@ for ($i = 0; $i -lt $args.Count; $i++) {
 
 if ($startDir -and (Test-Path $startDir)) {
     Set-Location $startDir
-} else {
+} elseif ($startDir) {
     Write-Warning "Start directory is not set or does not exist: $startDir"
 }
 
@@ -46,7 +46,7 @@ function Show-Help {
     Write-Host "  --https-port PORT   Specify custom HTTPS port (default: $DEFAULT_HTTPS_PORT)"
     Write-Host "  --install-dir DIR   Specify custom install location (default: $DEFAULT_INSTALL_DIR)"
     Write-Host "  --license-file DIR  Specify custom license location (default: $LICENSE_LOCATION)"
-    #Write-Host "  --xgt-port PORT    Specify custom XGT port (default: $DEFAULT_XGT_PORT)"
+    Write-Host "  --xgt-port PORT     Specify custom XGT port (default: $DEFAULT_XGT_PORT)"
     Write-Host "  --no-docker         Do not install docker if it's missing"
     Write-Host "  --no-browser        Do not launch the browser after setup"
     Write-Host "  --no-pause          Do not wait for input at the end"
@@ -73,7 +73,7 @@ for ($i = 0; $i -lt $args.Count; $i++) {
                 Write-Error "Error: Argument for --https-port is missing"
                 exit 1
             }
-        }<#
+        }
         '--xgt-port' {
             if ($i + 1 -lt $args.Count -and $args[$i + 1] -notmatch '^-') {
                 $XGT_PORT = $args[$i + 1]
@@ -82,7 +82,7 @@ for ($i = 0; $i -lt $args.Count; $i++) {
                 Write-Error "Error: Argument for --xgt-port is missing"
                 exit 1
             }
-        }#>
+        }
         '--install-dir' {
             if ($i + 1 -lt $args.Count -and $args[$i + 1] -notmatch '^-') {
                 $INSTALL_DIR = $args[$i + 1]
@@ -453,9 +453,9 @@ function Set-EnvVariables {
             $envContent = $envContent -replace "^#MC_SSL_PORT=$DEFAULT_HTTPS_PORT", "MC_SSL_PORT=$HTTPS_PORT"
         }
 
-        if ($envContent -match '^#MC_XGT_PORT=' -and $XGT_PORT -ne $DEFAULT_XGT_PORT) {
+        if ($envContent -match '^#XGT_PORT=' -and $XGT_PORT -ne $DEFAULT_XGT_PORT) {
             Write-InfoLog "Using non-standard XGT_PORT=$XGT_PORT"
-            $envContent = $envContent -replace "^#MC_XGT_PORT=$DEFAULT_XGT_PORT", "MC_XGT_PORT=$XGT_PORT"
+            $envContent = $envContent -replace "^#XGT_PORT=$DEFAULT_XGT_PORT", "XGT_PORT=$XGT_PORT"
         }
 
         if ($envContent -match '^#XGT_LICENSE_FILE=' -and (Test-Path $LICENSE_LOCATION)) {

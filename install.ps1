@@ -408,9 +408,7 @@ function Test-WindowsRequirements {
 function Test-Settings {
     Write-InfoLog "Checking settings for issues..."
 
-    Write-InfoLog $LICENSE_LOCATION
-
-     if (-not (Test-Path $LICENSE_LOCATION) -and ($LICENSE_LOCATION -ne $DEFAULT_LICENSE_LOCATION)) {
+    if (-not (Test-Path $LICENSE_LOCATION) -and ($LICENSE_LOCATION -ne $DEFAULT_LICENSE_LOCATION)) {
         Write-ErrorLog "Missing license file at: $LICENSE_LOCATION (custom path)"
         exit 1;
     }

@@ -24,9 +24,9 @@ Linux:
 
 ### Windows:
 
-[Download RocketgraphSetup.exe](https://github.com/Rocketgraphai/rocketgraph-setup/releases/latest/download/RocketgraphSetup.exe)
+[Download and run the installer](https://github.com/Rocketgraphai/rocketgraph-setup/releases/latest/download/RocketgraphSetup.exe) — it will automatically install Rocketgraph and all dependencies.
 
-Just download and run the installer. It will automatically install Rocketgraph and all dependencies.
+<a href="https://github.com/Rocketgraphai/rocketgraph-setup/blob/main/docs/v1.2/welcome.md" target="_blank" rel="noopener noreferrer"><strong>View the full Windows installation guide</strong></a> if needed.
 
 ### Prerequisites
 

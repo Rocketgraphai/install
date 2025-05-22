@@ -332,7 +332,7 @@ deploy_containers_docker() {
     if [ $use_timeout -eq 1 ] && ! output=$(run_with_timeout 300 $DOCKER_CMD compose pull 2>&1); then
         log_error "Failed to pull container images. Error: $output"
         exit 1
-    else
+    elif [ $use_timeout -eq 0 ]; then
         $DOCKER_CMD compose pull
         local return_code=$?
         if [ $return_code -ne 0 ]; then

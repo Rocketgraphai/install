@@ -64,7 +64,7 @@ while [ $# -gt 0 ]; do
       echo "  --http-port PORT   Specify custom HTTP port (default: $DEFAULT_HTTP_PORT)"
       echo "  --https-port PORT  Specify custom HTTPS port (default: $DEFAULT_HTTPS_PORT)"
       echo "  --docker-command DOCKER_COMMAND  Specify explicit location of the docker command (default: $DEFAULT_DOCKER_CMD)"
-      echo "  --use-time (0 or 1)  Run docker asynchronously with a timeout (default: $DEFAULT_DOCKER_CMD)"
+      echo "  --use-timeout (0 or 1)  Run docker asynchronously with a timeout (default: $DEFAULT_DOCKER_CMD)"
       echo "  -h, --help         Show this help message"
       exit 0
       ;;

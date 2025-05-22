@@ -334,6 +334,11 @@ deploy_containers_docker() {
         exit 1
     else
         $DOCKER_CMD compose pull
+        local return_code=$?
+        if [ $return_code -ne 0 ]; then
+            log_error "Failed to pull container images directly."
+            exit 1
+        fi
     fi
 
     log_info "Starting containers."

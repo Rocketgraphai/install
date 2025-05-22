@@ -10,10 +10,14 @@ NC='\033[0m' # No Color.
 # Default ports.
 DEFAULT_HTTP_PORT=80
 DEFAULT_HTTPS_PORT=443
+DEFAULT_DOCKER_CMD=docker
+DEFAULT_USE_TIMEOUT=1
 
 # Initialize variables with default values
 HTTP_PORT=$DEFAULT_HTTP_PORT
 HTTPS_PORT=$DEFAULT_HTTPS_PORT
+DOCKER_CMD=$DEFAULT_DOCKER_CMD
+USE_TIMEOUT=$DEFAULT_USE_TIMEOUT
 
 # Parse command line options
 while [ $# -gt 0 ]; do
@@ -36,11 +40,30 @@ while [ $# -gt 0 ]; do
         exit 1
       fi
       ;;
+    --docker-command)
+      if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
+        DOCKER_CMD=$2
+        shift 2
+      else
+        log_error "Error: Argument for $1 is missing"
+        exit 1
+      fi
+      ;;
+    --use-timeout)
+      if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
+        USE_TIMEOUT=$2
+        shift 2
+      else
+        log_error "Error: Argument for $1 is missing"
+        exit 1
+      fi
+      ;;
     -h|--help)
       echo "Usage: $0 [OPTIONS]"
       echo "Available options:"
       echo "  --http-port PORT   Specify custom HTTP port (default: $DEFAULT_HTTP_PORT)"
       echo "  --https-port PORT  Specify custom HTTPS port (default: $DEFAULT_HTTPS_PORT)"
+      echo "  --docker-command DOCKER_COMMAND  Specify explicit location of the docker command (default: $DEFAULT_DOCKER_CMD)"
       echo "  -h, --help         Show this help message"
       exit 0
       ;;
@@ -124,27 +147,27 @@ check_requirements_docker() {
     log_info "Checking system requirements."
 
     # Check if Docker is installed.
-    if ! command_exists docker; then
+    if ! command_exists $DOCKER_CMD; then
         log_error "Docker is not installed. Please install Docker first."
         log_info "Visit https://docs.docker.com/get-docker/ for installation instructions."
         exit 1
     fi
 
     # Check that Docker is running and the user has permissions to use it.
-    if ! run_with_timeout 10 "docker ps"; then
+    if ! run_with_timeout 10 "$DOCKER_CMD ps"; then
         log_error "Docker is either not running or this user doesn't have permission to use Docker. Make sure Docker is started. If Docker is running, it is likely the user doesn't have permission to use Docker. Either run the script as root or contact your system administrator."
         exit 1
     fi
 
     # Check if Docker Compose is installed.
-    if ! run_with_timeout 10 "docker compose version"; then
+    if ! run_with_timeout 10 "$DOCKER_CMD compose version"; then
         log_error "Docker is installed but Compose is not. Please install Docker Compose first."
         log_info "Visit https://docs.docker.com/compose/install/ for installation instructions."
         exit 1
     fi
 
     # Check Docker Compose version.
-    compose_version=$(docker compose version --short 2>/dev/null || docker-compose --version | awk '{print $3}')
+    compose_version=$($DOCKER_CMD compose version --short 2>/dev/null || docker-compose --version | awk '{print $3}')
     compose_version=$(echo "$compose_version" | sed 's/[^0-9.]*//g')
     if ! version_ge "$MIN_COMPOSE_VERSION" "$compose_version"; then
         log_error "Docker Compose version $compose_version is too old. Please install Docker Compose version $MIN_COMPOSE_VERSION or higher."
@@ -302,14 +325,18 @@ check_ports() {
 
 # Pull and start containers.
 deploy_containers_docker() {
+    local use_timeout=$1
+
     log_info "Pulling latest container images."
-    if ! output=$(run_with_timeout 300 docker compose pull 2>&1); then
+    if [ $use_timeout -eq 1 ] && ! output=$(run_with_timeout 300 $DOCKER_CMD compose pull 2>&1); then
         log_error "Failed to pull container images. Error: $output"
         exit 1
+    else
+        $DOCKER_CMD compose pull
     fi
 
     log_info "Starting containers."
-    if ! output=$(docker compose up -d 2>&1); then
+    if ! output=$($DOCKER_CMD compose up -d 2>&1); then
         log_error "Failed to start containers. Error: $output"
         exit 1
     fi
@@ -374,7 +401,7 @@ main() {
     if [ $(uname -m) = "ppc64le" ]; then
         deploy_containers_podman
     else
-        deploy_containers_docker
+        deploy_containers_docker $USE_TIMEOUT
     fi
 
     log_info "Installation completed successfully!"

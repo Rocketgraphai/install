@@ -14,6 +14,7 @@ DEFAULT_HTTPS_PORT=443
 # Initialize variables with default values
 HTTP_PORT=$DEFAULT_HTTP_PORT
 HTTPS_PORT=$DEFAULT_HTTPS_PORT
+ENTERPRISE_INSTALL=0
 
 # Parse command line options
 while [ $# -gt 0 ]; do
@@ -36,11 +37,16 @@ while [ $# -gt 0 ]; do
         exit 1
       fi
       ;;
+    --enterprise)
+      ENTERPRISE_INSTALL=1
+      shift 1
+      ;;
     -h|--help)
       echo "Usage: $0 [OPTIONS]"
       echo "Available options:"
       echo "  --http-port PORT   Specify custom HTTP port (default: $DEFAULT_HTTP_PORT)"
       echo "  --https-port PORT  Specify custom HTTPS port (default: $DEFAULT_HTTPS_PORT)"
+      echo "  --enterprise       Enable multi-user enterprise installation"
       echo "  -h, --help         Show this help message"
       exit 0
       ;;
@@ -279,6 +285,11 @@ set_variables() {
     if [ -f xgt.lic ]; then
         log_info "Custom license file found."
         portable_sed_i "s|^#XGT_LICENSE_FILE=/path/to/license/xgt-license.lic|XGT_LICENSE_FILE=$(pwd)/xgt.lic|" .env
+    fi
+
+    # Comment out empty authorization list to enable multi-user auth.
+    if [ $ENTERPRISE_INSTALL -eq 1 ]; then
+        portable_sed_i "s|^XGT_AUTH_TYPES=|#XGT_AUTH_TYPES=|" .env
     fi
 }
 

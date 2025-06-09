@@ -2,7 +2,17 @@
 
 ## Quick Installation
 
-### Linux / macOS:
+### Windows:
+
+[Download and run the installer](https://github.com/Rocketgraphai/rocketgraph-setup/releases/latest/download/RocketgraphSetup.exe) — it will automatically install Rocketgraph and all dependencies.
+
+<a href="https://github.com/Rocketgraphai/rocketgraph-setup/blob/main/docs/v1.2/welcome.md" target="_blank" rel="noopener noreferrer">View the full Windows installation guide</a> if needed.
+
+### macOS:
+
+[Download and run the installer](https://github.com/Rocketgraphai/rocketgraph-setup/releases/latest/download/Rocketgraph.pkg) — it will automatically install Rocketgraph and verify dependencies are satisfied.
+
+### Linux / macOS command line:
 
 To download and run the installation script in a single command:
 
@@ -22,12 +32,6 @@ Linux:
  - Most Linux distributions: Press `Ctrl + Alt + T`
  - Or search for "Terminal" in your desktop environment's application menu
 
-### Windows:
-
-[Download and run the installer](https://github.com/Rocketgraphai/rocketgraph-setup/releases/latest/download/RocketgraphSetup.exe) — it will automatically install Rocketgraph and all dependencies.
-
-<a href="https://github.com/Rocketgraphai/rocketgraph-setup/blob/main/docs/v1.2/welcome.md" target="_blank" rel="noopener noreferrer">View the full Windows installation guide</a> if needed.
-
 ### Prerequisites
 
 Rocketgraph **requires** a container platform:
@@ -37,13 +41,6 @@ Rocketgraph **requires** a container platform:
 
 ### What These Installers and Scripts Do:
 
-#### On Linux / macOS:
-
-- Install the necessary Docker Compose files (**`.yml`** and **`.env`**) in the directory where they are run.
-  📌 *If you want to install Rocketgraph in a specific location, run the script from that directory.*
-- Download and start **four separate containers** using [Docker Compose](https://docs.docker.com/compose).
-- The application will be available at **[http://localhost](http://localhost)** once the installation is complete.
-
 #### On Windows, the graphical installer (.exe)/scripts will:
 
 - Install all required dependencies, including Docker Desktop, WSL 2, and the Virtual Machine Platform.
@@ -51,6 +48,21 @@ Rocketgraph **requires** a container platform:
 - Start Docker Desktop.
 - Download and launch the Rocketgraph containers.
 - Automatically open your default browser to http://localhost and the port chosen when setup completes.
+
+#### On macOS, the graphical installer (.pkg)/scripts will:
+
+- Verify that dependencies are satisfied (Docker Desktop and configuration)
+- Set up the necessary Docker Compose files (docker-compose.yml, .env).
+- Download and launch the Rocketgraph containers.
+- Show the location http://localhost to connect to Rocketgraph when the setup completes.
+
+#### On Linux / macOS command line:
+
+- Install the necessary Docker Compose files (**`.yml`** and **`.env`**) in the directory where they are run.
+  📌 *If you want to install Rocketgraph in a specific location, run the script from that directory.*
+- Download and start **four separate containers** using [Docker Compose](https://docs.docker.com/compose).
+- The application will be available at **[http://localhost](http://localhost)** once the installation is complete.
+
 
 ### Customizing Ports (Optional)
 

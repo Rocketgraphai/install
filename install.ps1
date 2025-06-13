@@ -1,5 +1,10 @@
 # install.ps1
 
+# Logging functions
+function Write-InfoLog { param($Message) Write-Host "[INFO] $Message" -ForegroundColor Green }
+function Write-WarnLog { param($Message) Write-Host "[WARN] $Message" -ForegroundColor Yellow }
+function Write-ErrorLog { param($Message) Write-Host "[ERROR] $Message" -ForegroundColor Red }
+
 for ($i = 0; $i -lt $args.Count; $i++) {
     switch ($args[$i]) {
         '--start-dir' { $startDir = $args[++$i] }
@@ -25,6 +30,7 @@ $HTTPS_PORT = $DEFAULT_HTTPS_PORT
 $XGT_PORT = $DEFAULT_XGT_PORT
 $INSTALL_DIR = $DEFAULT_INSTALL_DIR
 $LICENSE_LOCATION = $DEFAULT_LICENSE_LOCATION
+$ENTERPRISE_INSTALL = $false
 
 # Minimum required Docker Compose version
 $MIN_COMPOSE_VERSION = "1.29.0"
@@ -47,6 +53,7 @@ function Show-Help {
     Write-Host "  --install-dir DIR   Specify custom install location (default: $DEFAULT_INSTALL_DIR)"
     Write-Host "  --license-file DIR  Specify custom license location (default: $LICENSE_LOCATION)"
     Write-Host "  --xgt-port PORT     Specify custom XGT port (default: $DEFAULT_XGT_PORT)"
+    Write-Host "  --enterprise        Enable multi-user enterprise installation"
     Write-Host "  --no-docker         Do not install docker if it's missing"
     Write-Host "  --no-browser        Do not launch the browser after setup"
     Write-Host "  --no-pause          Do not wait for input at the end"
@@ -62,6 +69,7 @@ for ($i = 0; $i -lt $args.Count; $i++) {
                 $i++
             } else {
                 Write-Error "Error: Argument for --http-port is missing"
+                Read-Host "Press Enter to exit..."
                 exit 1
             }
         }
@@ -71,15 +79,7 @@ for ($i = 0; $i -lt $args.Count; $i++) {
                 $i++
             } else {
                 Write-Error "Error: Argument for --https-port is missing"
-                exit 1
-            }
-        }
-        '--xgt-port' {
-            if ($i + 1 -lt $args.Count -and $args[$i + 1] -notmatch '^-') {
-                $XGT_PORT = $args[$i + 1]
-                $i++
-            } else {
-                Write-Error "Error: Argument for --xgt-port is missing"
+                Read-Host "Press Enter to exit..."
                 exit 1
             }
         }
@@ -89,6 +89,7 @@ for ($i = 0; $i -lt $args.Count; $i++) {
                 $i++
             } else {
                 Write-Error "Error: Argument for --install-dir is missing"
+                Read-Host "Press Enter to exit..."
                 exit 1
             }
         }
@@ -98,16 +99,22 @@ for ($i = 0; $i -lt $args.Count; $i++) {
                 $i++
             } else {
                 Write-Error "Error: Argument for --install-dir is missing"
+                Read-Host "Press Enter to exit..."
                 exit 1
             }
         }
-        '-h' {
-            Show-Help
-            exit 0
+        '--xgt-port' {
+            if ($i + 1 -lt $args.Count -and $args[$i + 1] -notmatch '^-') {
+                $XGT_PORT = $args[$i + 1]
+                $i++
+            } else {
+                Write-Error "Error: Argument for --xgt-port is missing"
+                Read-Host "Press Enter to exit..."
+                exit 1
+            }
         }
-        '--help' {
-            Show-Help
-            exit 0
+        '--enterprise' {
+            $ENTERPRISE_INSTALL = $true
         }
         '--no-docker' {
             $INSTALL_DOCKER = $false
@@ -118,6 +125,14 @@ for ($i = 0; $i -lt $args.Count; $i++) {
         '--no-pause' {
             $PAUSE_AT_END = $false
         }
+        '-h' {
+            Show-Help
+            exit 0
+        }
+        '--help' {
+            Show-Help
+            exit 0
+        }
         '--start-dir' {
             $i++
             #Ignore
@@ -125,15 +140,11 @@ for ($i = 0; $i -lt $args.Count; $i++) {
         default {
             Write-Error "Unknown option: $($args[$i])"
             Write-Host "Use -h or --help to see available options"
+            Read-Host "Press Enter to exit..."
             exit 1
         }
     }
 }
-
-# Logging functions
-function Write-InfoLog { param($Message) Write-Host "[INFO] $Message" -ForegroundColor Green }
-function Write-WarnLog { param($Message) Write-Host "[WARN] $Message" -ForegroundColor Yellow }
-function Write-ErrorLog { param($Message) Write-Host "[ERROR] $Message" -ForegroundColor Red }
 
 function Get-OSPlatform {
     # Try PowerShell Core method first
@@ -178,13 +189,13 @@ if (-not $isAdmin) {
 
         # Save to temp file and elevate
         $tempFile = [IO.Path]::Combine($env:TEMP, "rocketgraph_installer.ps1")
-        Set-Content -Path $tempFile -Value $scriptContent -Encoding UTF8 > $null  # <== suppress output
-        $quotedArgs = $args | ForEach-Object { "`"$_`"" }
+        Set-Content -Path $tempFile -Value $scriptContent -Encoding UTF8 > $null
+        $quotedArgs = @()
+        foreach ($arg in $args) { $quotedArgs += "`"$arg`"" }
         $quotedArgs += "`"--start-dir`""
         $quotedArgs += "`"$DEFAULT_INSTALL_DIR`""
         $allArgs = @("-ExecutionPolicy", "Bypass", "-File", "`"$tempFile`"") + $quotedArgs
 
-        Write-InfoLog $DEFAULT_INSTALL_DIR
         Start-Process powershell -ArgumentList $allArgs -WorkingDirectory $DEFAULT_INSTALL_DIR -Verb RunAs
         exit 1
     } else {
@@ -430,7 +441,7 @@ function Test-Settings {
 function Initialize-InstallationDirectory {
     New-Item -ItemType Directory -Path $INSTALL_DIR -Force | Out-Null
     Set-Location -Path $INSTALL_DIR
-    Write-InfoLog "Using installation directory at ${$INSTALL_DIR}..."
+    Write-InfoLog "Using installation directory at $INSTALL_DIR..."
 }
 
 function Set-EnvVariables {
@@ -460,6 +471,11 @@ function Set-EnvVariables {
             Write-InfoLog "Custom license file found."
             $escapedPath = $LICENSE_LOCATION -replace '\\', '\\\\'
             $envContent = $envContent -replace '^#XGT_LICENSE_FILE=.*', "XGT_LICENSE_FILE=`"$escapedPath`""
+        }
+
+        if ($ENTERPRISE_INSTALL) {
+            Write-InfoLog "Enterprise mode enabled."
+            $envContent = $envContent -replace '^XGT_AUTH_TYPES=', '#XGT_AUTH_TYPES='
         }
 
         $USE_SSL = 0

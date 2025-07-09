@@ -254,8 +254,12 @@ download_config() {
     fi
 
     # Set appropriate permissions.
-    chmod 600 .env 2>/dev/null
-    chmod 644 docker-compose.yml
+    if ! chmod 600 .env >/dev/null 2>&1; then
+        log_error "Failed to set permissions on .env file."
+    fi
+    if ! chmod 644 docker-compose.yml >/dev/null 2>&1; then
+        log_error "Failed to set permissions on docker-compose.yml file."
+    fi
 }
 
 # Set the values of variables needed by the script.  These get a value from the
@@ -324,6 +328,13 @@ deploy_containers_docker() {
         log_error "Failed to start containers. Error: $output"
         exit 1
     fi
+
+    # Extract site-config templates if they exist in the container
+    if docker run --rm -v $(pwd):/output rocketgraph/mission-control-backend:latest sh -c 'if [ -d /app/templates ]; then cp -r /app/templates /output/; else exit 1; fi' >/dev/null 2>&1; then
+        log_info "Site-config templates extracted successfully."
+    elif docker run --rm -v $(pwd):/output rocketgraph/mission-control-backend:latest sh -c '[ -d /app/templates ]' >/dev/null 2>&1; then
+        log_error "Failed to extract site-config templates."
+    fi
 }
 
 # Pull and start containers.
@@ -341,12 +352,16 @@ deploy_containers_podman() {
     # Ensure volume exists
     if ! podman volume inspect rocketgraph_mongodb-data >/dev/null 2>&1; then
         log_info "Creating MongoDB volume..."
-        podman volume create rocketgraph_mongodb-data
+        if ! podman volume create rocketgraph_mongodb-data >/dev/null 2>&1; then
+            log_error "Failed to create MongoDB volume."
+        fi
     fi
 
     # Fix permissions on the volume for MongoDB
     log_info "Setting correct permissions on MongoDB volume..."
-    podman unshare chown -R 999:999 "$(podman volume inspect rocketgraph_mongodb-data -f '{{.Mountpoint}}')"
+    if ! podman unshare chown -R 999:999 "$(podman volume inspect rocketgraph_mongodb-data -f '{{.Mountpoint}}')" >/dev/null 2>&1; then
+        log_error "Failed to set permissions on MongoDB volume."
+    fi
 
     # Check if there are existing containers that need to be removed
     if podman ps -a --format "{{.Names}}" | grep -q "rocketgraph_"; then
@@ -365,8 +380,17 @@ deploy_containers_podman() {
     podman-compose up -d frontend
 
     # Allow user to log off and keep containers running
-    loginctl enable-linger
+    if ! loginctl enable-linger >/dev/null 2>&1; then
+        log_error "Failed to enable linger for user sessions."
+    fi
     log_info "Rocketgraph startup complete. Check status with: podman-compose ps"
+
+    # Extract site-config templates if they exist in the container
+    if podman run --rm -v $(pwd):/output rocketgraph/mission-control-backend:latest sh -c 'if [ -d /app/templates ]; then cp -r /app/templates /output/; else exit 1; fi' >/dev/null 2>&1; then
+        log_info "Site-config templates extracted successfully."
+    elif podman run --rm -v $(pwd):/output rocketgraph/mission-control-backend:latest sh -c '[ -d /app/templates ]' >/dev/null 2>&1; then
+        log_error "Failed to extract site-config templates."
+    fi
 }
 
 # Main installation process.

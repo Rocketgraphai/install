@@ -543,6 +543,17 @@ function Start-Containers {
       Write-ErrorLog "Failed to start containers. Error: $dockerOutput"
       exit 1
     }
+
+    # Extract site-config templates if they exist in the container
+    $templatesResult = docker run --rm -v "${PWD}:/output" rocketgraph/mission-control-backend:latest sh -c 'if [ -d /app/templates ]; then cp -r /app/templates /output/; else exit 1; fi' 2>$null
+    if ($LASTEXITCODE -eq 0) {
+        Write-InfoLog "Site-config templates extracted successfully."
+    } else {
+        $templatesExist = docker run --rm -v "${PWD}:/output" rocketgraph/mission-control-backend:latest sh -c '[ -d /app/templates ]' 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            Write-ErrorLog "Failed to extract site-config templates."
+        }
+    }
 }
 
 # Main installation process

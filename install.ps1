@@ -229,18 +229,10 @@ function Test-VersionGreaterOrEqual {
     return ([System.Version]$Version1 -ge [System.Version]$Version2)
 }
 
-function Enable-WSL2 {
-    Write-InfoLog "Enabling WSL and Virtual Machine Platform..."
-
-    Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux -NoRestart -All > $null 2>&1
-    Enable-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform -NoRestart -All > $null 2>&1
-
-    # Set WSL2 as default version
-    wsl --set-default-version 2 > $null 2>&1
-}
-
 function Install-Docker {
-    Enable-WSL2
+	if ((-not (Ensure-WSL2))) {
+		exit 1
+	}
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     $url = "https://desktop.docker.com/win/main/amd64/Docker Desktop Installer.exe"
     $dockerInstaller = "$env:TEMP\DockerDesktopInstaller.exe"
@@ -270,7 +262,7 @@ function Is-RebootPending {
 function Ensure-WSL2 {
     # Minimum Windows build for WSL2 is 19041
     if ([System.Environment]::OSVersion.Version.Build -lt 19041) {
-        Write-InfoLog "WSL2 requires Windows 10 version 2004 or later."
+        Write-ErrorLog "WSL2 requires Windows 10 version 2004 (build 19041) or later."
         return $false
     }
 
@@ -281,31 +273,45 @@ function Ensure-WSL2 {
 
     if ($wslFeature.State -ne "Enabled") {
         Write-InfoLog "Enabling WSL feature..."
-        Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux -NoRestart > $null 2>&1
-        $needsEnable = $true
+        try {
+			Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux -NoRestart -ErrorAction Stop
+			$needsEnable = $true
+		} catch {
+			Write-ErrorLog ("Failed to enable WSL. The component store may be unavailable in this environment (e.g., Windows Sandbox or VM without nested virtualization).`nError details: {0}" -f $_.Exception.Message)
+			return $false
+		}
     }
 
     if ($vmFeature.State -ne "Enabled") {
         Write-InfoLog "Enabling VirtualMachinePlatform for WSL2..."
-        Enable-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform -NoRestart > $null 2>&1
-        $needsEnable = $true
-    }
+		try {
+			Enable-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform -NoRestart -ErrorAction Stop
+			$needsEnable = $true
+		} catch {
+			Write-ErrorLog ("Failed to enable VirtualMachinePlatform. This may be due to missing virtualization support or a restricted environment.`nError details: {0}" -f $_.Exception.Message)
+			return $false
+		}
+	}
+
 
     try {
         wsl --set-default-version 2 > $null 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            throw "wsl.exe exited with code $LASTEXITCODE"
+        }
         Write-InfoLog "WSL2 set as the default version."
     } catch {
-        Write-ErrorLog "Failed to set WSL2 as default. Try restarting or check WSL installation status."
+        Write-ErrorLog "Failed to set WSL2 as default. This might be due to missing kernel update or lack of virtualization support. Try restarting and ensure WSL2 is supported on this system."
         return $false
     }
 
     if ($needsEnable) {
-        Write-ErrorLog "Features were enabled. Please restart your system to complete WSL2 installation."
+        Write-ErrorLog "WSL2 features were just enabled. Please restart your system to complete installation."
         return $false
     }
 
     if (Is-RebootPending) {
-        Write-ErrorLog  "A system reboot is required to complete the WSL2 or Docker setup."
+        Write-ErrorLog "A system reboot is required to finalize the WSL2 setup."
         return $false
     }
 

@@ -6,7 +6,7 @@
 
 [Download and run the installer](https://github.com/Rocketgraphai/rocketgraph-setup/releases/latest/download/RocketgraphSetup.exe) — it will automatically install Rocketgraph and all dependencies.
 
-<a href="https://github.com/Rocketgraphai/rocketgraph-setup/blob/main/docs/v1.2/welcome.md" target="_blank" rel="noopener noreferrer">View the full Windows installation guide</a> if needed.
+<a href="https://github.com/Rocketgraphai/rocketgraph-setup/blob/main/docs/v1.3/welcome.md" target="_blank" rel="noopener noreferrer">View the full Windows installation guide</a> if needed.
 
 ### macOS:
 

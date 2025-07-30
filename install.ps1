@@ -60,6 +60,18 @@ function Show-Help {
     Write-Host "  -h, --help          Show this help message"
 }
 
+function Exit-Script {
+    param (
+        [int]$Code = 1
+    )
+
+    if ($PAUSE_AT_END) {
+        Read-Host "Press Enter to exit..."
+    }
+
+    [System.Environment]::Exit($Code)
+}
+
 # Parse command-line arguments
 for ($i = 0; $i -lt $args.Count; $i++) {
     switch ($args[$i]) {
@@ -230,9 +242,9 @@ function Test-VersionGreaterOrEqual {
 }
 
 function Install-Docker {
-	if ((-not (Ensure-WSL2))) {
-		exit 1
-	}
+    if ((-not (Ensure-WSL2))) {
+        Exit-Script 1
+    }
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     $url = "https://desktop.docker.com/win/main/amd64/Docker Desktop Installer.exe"
     $dockerInstaller = "$env:TEMP\DockerDesktopInstaller.exe"
@@ -240,7 +252,7 @@ function Install-Docker {
     $wc = New-Object System.Net.WebClient
     $wc.DownloadFile($url, $dockerInstaller)
     Write-InfoLog "Installing Docker Desktop (may require reboot)..."
-    Start-Process -FilePath $dockerInstaller -ArgumentList "install" -Wait
+    Start-Process -FilePath $dockerInstaller -ArgumentList "install", "--quiet", '--accept-license' -Wait
     # Refresh environment variables from registry
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
                 [System.Environment]::GetEnvironmentVariable("Path", "User")
@@ -274,26 +286,26 @@ function Ensure-WSL2 {
     if ($wslFeature.State -ne "Enabled") {
         Write-InfoLog "Enabling WSL feature..."
         try {
-			Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux -NoRestart -ErrorAction Stop
-			$needsEnable = $true
-		} catch {
-			Write-ErrorLog ("Failed to enable WSL. The component store may be unavailable in this environment (e.g., Windows Sandbox or VM without nested virtualization).`nError details: {0}" -f $_.Exception.Message)
-			return $false
-		}
+            Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux -NoRestart -ErrorAction Stop
+            $needsEnable = $true
+        } catch {
+            Write-ErrorLog ("Failed to enable WSL. The component store may be unavailable in this environment (e.g., Windows Sandbox or VM without nested virtualization).`nError details: {0}" -f $_.Exception.Message)
+            return $false
+        }
     }
 
     if ($vmFeature.State -ne "Enabled") {
         Write-InfoLog "Enabling VirtualMachinePlatform for WSL2..."
-		try {
-			Enable-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform -NoRestart -ErrorAction Stop
-			$needsEnable = $true
-		} catch {
-			Write-ErrorLog ("Failed to enable VirtualMachinePlatform. This may be due to missing virtualization support or a restricted environment.`nError details: {0}" -f $_.Exception.Message)
-			return $false
-		}
-	}
+        try {
+            Enable-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform -NoRestart -ErrorAction Stop
+            $needsEnable = $true
+        } catch {
+            Write-ErrorLog ("Failed to enable VirtualMachinePlatform. This may be due to missing virtualization support or a restricted environment.`nError details: {0}" -f $_.Exception.Message)
+            return $false
+        }
+    }
 
-
+    # Try setting WSL2 as the default
     try {
         wsl --set-default-version 2 > $null 2>&1
         if ($LASTEXITCODE -ne 0) {
@@ -301,8 +313,45 @@ function Ensure-WSL2 {
         }
         Write-InfoLog "WSL2 set as the default version."
     } catch {
-        Write-ErrorLog "Failed to set WSL2 as default. This might be due to missing kernel update or lack of virtualization support. Try restarting and ensure WSL2 is supported on this system."
-        return $false
+        Write-Warning "wsl --set-default-version failed. Attempting to detect if 'wsl --update' is supported..."
+
+        # Check if 'wsl --update' exists
+        $hasWSLUpdate = $false
+        try {
+            $wslHelp = & wsl --help 2>&1
+            if ($wslHelp -match '--update') {
+                $hasWSLUpdate = $true
+            }
+        } catch {
+            Write-ErrorLog "WSL is not available: $_"
+            return $false
+        }
+
+        if ($hasWSLUpdate) {
+            try {
+                Write-InfoLog "Running 'wsl --update'..."
+                $output = & wsl --update 2>&1
+                if ($LASTEXITCODE -ne 0) {
+                    Write-WarningLog "wsl --update failed with exit code $LASTEXITCODE.`n$output"
+                }
+                Write-InfoLog "WSL updated successfully."
+            } catch {
+                Write-ErrorLog "Failed to run 'wsl --update'. Error: $_"
+                return $false
+            }
+        } else {
+            try {
+                Write-InfoLog "'wsl --update' not supported. Attempting 'wsl --install --no-distribution'..."
+                $output = & wsl --install --no-distribution 2>&1
+                if ($LASTEXITCODE -ne 0) {
+                    Write-WarningLog "wsl --install failed with exit code $LASTEXITCODE.`n$output"
+                }
+                Write-InfoLog "WSL installed successfully (no distribution)."
+            } catch {
+                Write-ErrorLog "Failed to run 'wsl --install --no-distribution'. Error: $_"
+                return $false
+            }
+        }
     }
 
     if ($needsEnable) {
@@ -312,6 +361,7 @@ function Ensure-WSL2 {
 
     if (Is-RebootPending) {
         Write-ErrorLog "A system reboot is required to finalize the WSL2 setup."
+        Exit-Script 2
         return $false
     }
 
@@ -330,12 +380,12 @@ function Test-Requirements {
         } else {
             Write-ErrorLog "Docker is not installed. Please install Docker Desktop for Windows first."
             Write-InfoLog "Visit https://docs.docker.com/desktop/windows/install/ for installation instructions"
-            exit 1
+            Exit-Script 1
         }
     }
 
     if ($isWindowsPlat -and (-not (Ensure-WSL2))) {
-        exit 1
+        Exit-Script 1
     }
 
     # Ensure Docker is running
@@ -346,7 +396,7 @@ function Test-Requirements {
     if ($LASTEXITCODE -ne 0) {
         if(-not $isWindowsPlat) {
             Write-ErrorLog "Docker not running."
-            exit 1
+            Exit-Script 1
         }
 
         Write-InfoLog "Docker is not running. Attempting to start Docker Desktop..."
@@ -355,7 +405,7 @@ function Test-Requirements {
         Start-Process "C:\Program Files\Docker\Docker\Docker Desktop.exe"
 
         # Wait for it to become responsive
-        $maxAttempts = 30
+        $maxAttempts = 60
         $attempt = 0
         while ($attempt -lt $maxAttempts) {
             Start-Sleep -Seconds 2
@@ -369,7 +419,7 @@ function Test-Requirements {
 
         if ($LASTEXITCODE -ne 0) {
             Write-ErrorLog "Docker failed to start or become ready within timeout."
-            exit 1
+            Exit-Script 1
         }
     } else {
         Write-InfoLog "Docker is already running."
@@ -379,14 +429,14 @@ function Test-Requirements {
     $composeVersion = @(docker compose version --short 2>$null)[0] -replace '[^0-9.]'
     if (-not (Test-VersionGreaterOrEqual $composeVersion $MIN_COMPOSE_VERSION)) {
         Write-ErrorLog "Docker Compose version $composeVersion is too old. Please install Docker Compose version $MIN_COMPOSE_VERSION or higher."
-        exit 1
+        Exit-Script 1
     }
 
     # Check disk space (1GB = 1073741824 bytes)
     $drive = Get-PSDrive -Name (Get-Location).Drive.Name
     if ($drive.Free -lt 1GB) {
         Write-ErrorLog "Insufficient disk space. Please ensure at least 1GB of free space."
-        exit 1
+        Exit-Script 1
     }
 
     # Check network connectivity
@@ -398,7 +448,7 @@ function Test-Requirements {
     }
     catch {
         Write-ErrorLog "Network connectivity issue. Unable to reach https://install.rocketgraph.com"
-        exit 1
+        Exit-Script 1
     }
 }
 
@@ -412,12 +462,12 @@ function Test-WindowsRequirements {
 
     if ($version.Major -lt 10) {
         Write-ErrorLog "Windows 10 or higher is required"
-        exit 1
+        Exit-Script 1
     }
 
     if ($version.Build -lt 18362) {
         Write-ErrorLog "Windows 10 version 1903 or higher is required"
-        exit 1
+        Exit-Script 1
     }
 }
 
@@ -427,7 +477,7 @@ function Test-Settings {
 
     if (-not (Test-Path $LICENSE_LOCATION) -and ($LICENSE_LOCATION -ne $DEFAULT_LICENSE_LOCATION)) {
         Write-ErrorLog "Missing license file at: $LICENSE_LOCATION (custom path)"
-        exit 1;
+        Exit-Script 1
     }
 
     $portsToCheck = @(
@@ -438,7 +488,7 @@ function Test-Settings {
     foreach ($port in $portsToCheck) {
         if (Test-PortInUse $port) {
             Write-ErrorLog "Port $port is already in use. Please stop the existing service or specify a different port."
-            exit 1
+            Exit-Script 1
         }
     }
 }
@@ -505,7 +555,7 @@ function Get-ConfigurationFiles {
     }
     catch {
         Write-ErrorLog "Failed to download docker-compose.yml"
-        exit 1
+        Exit-Script 1
     }
 
     try {
@@ -538,7 +588,7 @@ function Start-Containers {
     $pullJob = Start-Job -ScriptBlock { docker compose pull 2>$null }
     if (-not (Wait-Job $pullJob -Timeout 300)) {
         Write-ErrorLog "Failed to pull container images (timeout)"
-        exit 1
+        Exit-Script 1
     }
     $null = Receive-Job $pullJob
     Remove-Job $pullJob
@@ -547,18 +597,24 @@ function Start-Containers {
     $null = docker compose up -d 2>&1 | Tee-Object -Variable dockerOutput
     if ($LASTEXITCODE -ne 0) {
       Write-ErrorLog "Failed to start containers. Error: $dockerOutput"
-      exit 1
+      Exit-Script 1
     }
 
-    # Extract site-config templates if they exist in the container
-    $templatesResult = docker run --rm -v "${PWD}:/output" rocketgraph/mission-control-backend:latest sh -c 'if [ -d /app/templates ]; then cp -r /app/templates /output/; else exit 1; fi' 2>$null
+    # Extract site-config templates from the running backend container
+    $containerId = docker ps --filter "ancestor=rocketgraph/mission-control-backend:latest" --format "{{.ID}}" | Select-Object -First 1
+
+    if (-not $containerId) {
+        Write-ErrorLog "Backend container not found for template extraction."
+        return
+    }
+
+    Write-InfoLog "Attempting to copy site-config templates from container..."
+    docker cp "${containerId}:/app/templates" "$INSTALL_DIR" 2>$null
+
     if ($LASTEXITCODE -eq 0) {
         Write-InfoLog "Site-config templates extracted successfully."
     } else {
-        $templatesExist = docker run --rm -v "${PWD}:/output" rocketgraph/mission-control-backend:latest sh -c '[ -d /app/templates ]' 2>$null
-        if ($LASTEXITCODE -eq 0) {
-            Write-ErrorLog "Failed to extract site-config templates."
-        }
+        Write-InfoLog "No site-config templates found in the container or copy failed."
     }
 }
 

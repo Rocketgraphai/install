@@ -329,11 +329,23 @@ deploy_containers_docker() {
         exit 1
     fi
 
-    # Extract site-config templates if they exist in the container
-    if docker run --rm -v $(pwd):/output rocketgraph/mission-control-backend:latest sh -c 'if [ -d /app/templates ]; then cp -r /app/templates /output/; else exit 1; fi' >/dev/null 2>&1; then
-        log_info "Site-config templates extracted successfully."
-    elif docker run --rm -v $(pwd):/output rocketgraph/mission-control-backend:latest sh -c '[ -d /app/templates ]' >/dev/null 2>&1; then
-        log_error "Failed to extract site-config templates."
+    # Try to extract templates from a running container first
+    container_id=$(docker ps --filter "ancestor=rocketgraph/mission-control-backend:latest" --format "{{.ID}}" | head -n 1)
+
+    if [ -n "$container_id" ]; then
+        if docker cp "${container_id}:/app/templates" ./ >/dev/null 2>&1; then
+            log_info "Site-config templates extracted successfully from running container."
+        else
+            log_info "No templates found or failed to copy from running container. Skipping."
+        fi
+    else
+        # Fall back to running a temporary container
+        if docker run --rm -v "$(pwd):/output" rocketgraph/mission-control-backend:latest \
+            sh -c 'cp -r /app/templates /output/' >/dev/null 2>&1; then
+            log_info "Site-config templates extracted successfully from fresh container."
+        else
+            log_info "No site-config templates found in image or extraction failed."
+        fi
     fi
 }
 

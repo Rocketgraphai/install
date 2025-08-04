@@ -5,6 +5,9 @@ function Write-InfoLog { param($Message) Write-Host "[INFO] $Message" -Foregroun
 function Write-WarnLog { param($Message) Write-Host "[WARN] $Message" -ForegroundColor Yellow }
 function Write-ErrorLog { param($Message) Write-Host "[ERROR] $Message" -ForegroundColor Red }
 
+$ScriptVersion = "1.4.2"
+Write-InfoLog "Running Script Version $ScriptVersion"
+
 for ($i = 0; $i -lt $args.Count; $i++) {
     switch ($args[$i]) {
         '--start-dir' { $startDir = $args[++$i] }

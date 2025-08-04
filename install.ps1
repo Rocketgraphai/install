@@ -14,7 +14,7 @@ for ($i = 0; $i -lt $args.Count; $i++) {
 if ($startDir -and (Test-Path $startDir)) {
     Set-Location $startDir
 } elseif ($startDir) {
-    Write-Warning "Start directory is not set or does not exist: $startDir"
+    Write-WarnLog "Start directory is not set or does not exist: $startDir"
 }
 
 # Default ports
@@ -313,7 +313,7 @@ function Ensure-WSL2 {
         }
         Write-InfoLog "WSL2 set as the default version."
     } catch {
-        Write-Warning "wsl --set-default-version failed. Attempting to detect if 'wsl --update' is supported..."
+        Write-WarnLog "wsl --set-default-version failed. Attempting to detect if 'wsl --update' is supported..."
 
         # Check if 'wsl --update' exists
         $hasWSLUpdate = $false
@@ -332,7 +332,7 @@ function Ensure-WSL2 {
                 Write-InfoLog "Running 'wsl --update'..."
                 $output = & wsl --update 2>&1
                 if ($LASTEXITCODE -ne 0) {
-                    Write-WarningLog "wsl --update failed with exit code $LASTEXITCODE.`n$output"
+                    Write-WarnLog "wsl --update failed with exit code $LASTEXITCODE.`n$output"
                 }
                 Write-InfoLog "WSL updated successfully."
             } catch {
@@ -344,7 +344,7 @@ function Ensure-WSL2 {
                 Write-InfoLog "'wsl --update' not supported. Attempting 'wsl --install --no-distribution'..."
                 $output = & wsl --install --no-distribution 2>&1
                 if ($LASTEXITCODE -ne 0) {
-                    Write-WarningLog "wsl --install failed with exit code $LASTEXITCODE.`n$output"
+                    Write-WarnLog "wsl --install failed with exit code $LASTEXITCODE.`n$output"
                 }
                 Write-InfoLog "WSL installed successfully (no distribution)."
             } catch {
@@ -541,7 +541,7 @@ function Set-EnvVariables {
 
         $envContent | Set-Content $envFile
     } else {
-        Write-Warning ".env file not found."
+        Write-WarnLog ".env file not found."
     }
 }
 
@@ -659,7 +659,7 @@ try {
     # Run main function
     Start-Installation
 } catch {
-    Write-Error "Script error: $_"
+    Write-ErrorLog "Script error: $_"
 } finally {
     if ($PAUSE_AT_END) {
         Read-Host "Press Enter to exit..."

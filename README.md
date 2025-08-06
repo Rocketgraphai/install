@@ -36,7 +36,16 @@ Linux:
 
 Rocketgraph **requires** a container platform:
 
- - **Most systems**: [Docker](https://www.docker.com/products/docker-desktop). Ensure Docker is installed and running before proceeding.
+ - **Most systems**, install either:
+    - [Docker Desktop](https://www.docker.com/products/docker-desktop)
+        - Includes Docker Engine, GUI dashboard, system tray integration, and automatic VM management (required on macOS/Windows).
+        - Requires a graphical environment.
+        - Recommended for desktop users.
+
+    - [Docker Engine](https://docs.docker.com/engine/install/)
+        - Core runtime and CLI tools (`dockerd` and `docker`).
+        - No GUI. Suitable for servers, CI, or headless systems.
+        - Recommended for Linux servers or advanced users.
  - **IBM Power platforms**: Use podman instead of Docker. The installation scripts will automatically detect and use the appropriate container platform.
 
 ### What These Installers and Scripts Do:
@@ -148,5 +157,5 @@ Before running any script, it’s good practice to review its contents to ensure
 
 ## More Resources
 
-For more details about the Windows installer itself, including release notes and troubleshooting, see the  
+For more details about the Windows installer itself, including release notes and troubleshooting, see the
 [Rocketgraph Installer Repository](https://github.com/Rocketgraphai/rocketgraph-setup)

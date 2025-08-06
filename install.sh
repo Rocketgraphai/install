@@ -1,6 +1,9 @@
 #!/bin/sh
 # install.sh
-set -euo pipefail
+set -eu
+if (set -o pipefail 2>/dev/null); then
+  set -o pipefail
+fi
 
 # Color codes for output.
 RED='\033[0;31m'
@@ -109,35 +112,35 @@ version_ge() {
 
 # Function to run command with timeout.
 run_with_timeout() {
-  local timeout=$1
-  shift
+    local timeout=$1
+    shift
 
-  local tmpfile
-  tmpfile=$(mktemp)
+    local tmpfile
+    tmpfile=$(mktemp)
 
-  # Run the command, capture output silently
-  "$@" >"$tmpfile" 2>&1 &
-  local pid=$!
+    # Run the command, capture output silently
+    "$@" >"$tmpfile" 2>&1 &
+    local pid=$!
 
-  local count=0
-  while [ $count -lt "$timeout" ] && kill -0 "$pid" 2>/dev/null; do
-    sleep 1
-    count=$((count + 1))
-  done
+    local count=0
+    while [ $count -lt "$timeout" ] && kill -0 "$pid" 2>/dev/null; do
+      sleep 1
+      count=$((count + 1))
+    done
 
-  if kill -0 "$pid" 2>/dev/null; then
-    kill -TERM "$pid"
-    wait "$pid" 2>/dev/null
+    if kill -0 "$pid" 2>/dev/null; then
+      kill -TERM "$pid"
+      wait "$pid" 2>/dev/null
+      cat "$tmpfile"
+      rm -f "$tmpfile"
+      return 124  # Timeout
+    fi
+
+    wait "$pid"
+    local code=$?
     cat "$tmpfile"
     rm -f "$tmpfile"
-    return 124  # Timeout
-  fi
-
-  wait "$pid"
-  local code=$?
-  cat "$tmpfile"
-  rm -f "$tmpfile"
-  return $code
+    return $code
 }
 
 # Check system requirements.

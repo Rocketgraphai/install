@@ -350,6 +350,8 @@ deploy_containers() {
             log_error "  $line"
         done < "$tmpfile"
         rm -f "$tmpfile"
+        log_error ""
+        log_error "If a port is already in use, you may need to change it in the .env file (e.g., MC_PORT (default: 80), MC_SSL_PORT (default: 443), etc.), then rerun the install."
         exit 1
     fi
     rm -f "$tmpfile"

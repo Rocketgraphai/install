@@ -163,7 +163,7 @@ check_requirements() {
     fi
 
     # Check if Docker Compose or Podman-Compose is installed.
-    if ! output=(run_with_timeout 10 $compose_tool version); then
+    if ! output=$(run_with_timeout 10 $compose_tool version); then
         log_error "$container_tool is installed but $compose_tool is not. Please install $compose_tool first. Output:"
         while IFS= read -r line; do
             log_error "  $line"

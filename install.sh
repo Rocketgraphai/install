@@ -1,5 +1,6 @@
 #!/bin/sh
 # install.sh
+set -euo pipefail
 
 # Color codes for output.
 RED='\033[0;31m'
@@ -15,6 +16,10 @@ DEFAULT_HTTPS_PORT=443
 HTTP_PORT=$DEFAULT_HTTP_PORT
 HTTPS_PORT=$DEFAULT_HTTPS_PORT
 ENTERPRISE_INSTALL=0
+
+EXISITING_ENV=0
+USE_SSL=0
+USE_PODMAN=0
 
 # Parse command line options
 while [ $# -gt 0 ]; do
@@ -41,12 +46,17 @@ while [ $# -gt 0 ]; do
       ENTERPRISE_INSTALL=1
       shift 1
       ;;
+    --use-podman)
+      USE_PODMAN=1
+      shift
+      ;;
     -h|--help)
       echo "Usage: $0 [OPTIONS]"
       echo "Available options:"
       echo "  --http-port PORT   Specify custom HTTP port (default: $DEFAULT_HTTP_PORT)"
       echo "  --https-port PORT  Specify custom HTTPS port (default: $DEFAULT_HTTPS_PORT)"
       echo "  --enterprise       Enable multi-user enterprise installation"
+      echo "  --use-podman       Use Podman instead of Docker, falling back to Docker if Podman is not installed"
       echo "  -h, --help         Show this help message"
       exit 0
       ;;
@@ -99,103 +109,77 @@ version_ge() {
 
 # Function to run command with timeout.
 run_with_timeout() {
-    local timeout=$1
-    shift
-    local command="$@"
+  local timeout=$1
+  shift
 
-    # Start the command in background and redirect output.
-    ($command >/dev/null 2>&1) & local pid=$!
+  local tmpfile
+  tmpfile=$(mktemp)
 
-    # Wait for specified timeout.
-    local count=0
-    while [ $count -lt $timeout ] && kill -0 $pid 2>/dev/null; do
-        sleep 1
-        count=$((count + 1))
-    done
+  # Run the command, capture output silently
+  "$@" >"$tmpfile" 2>&1 &
+  local pid=$!
 
-    # If process is still running, kill it and return error.
-    if kill -0 $pid 2>/dev/null; then
-        kill -TERM $pid
-        wait $pid 2>/dev/null
-        return 1
-    fi
+  local count=0
+  while [ $count -lt "$timeout" ] && kill -0 "$pid" 2>/dev/null; do
+    sleep 1
+    count=$((count + 1))
+  done
 
-    # Wait for process to finish and get return code.
-    wait $pid
-    return $?
+  if kill -0 "$pid" 2>/dev/null; then
+    kill -TERM "$pid"
+    wait "$pid" 2>/dev/null
+    cat "$tmpfile"
+    rm -f "$tmpfile"
+    return 124  # Timeout
+  fi
+
+  wait "$pid"
+  local code=$?
+  cat "$tmpfile"
+  rm -f "$tmpfile"
+  return $code
 }
 
 # Check system requirements.
-check_requirements_docker() {
+check_requirements() {
+    local container_tool="$1"
+    local compose_tool="$2"
     log_info "Checking system requirements."
 
-    # Check if Docker is installed.
-    if ! command_exists docker; then
-        log_error "Docker is not installed. Please install Docker first."
-        log_info "Visit https://docs.docker.com/get-docker/ for installation instructions."
+    # Check if Docker/Podman is installed.
+    if ! command_exists $container_tool; then
+        log_error "$container_tool is not installed. Please install $container_tool first."
+        [ "$container_tool" = "docker" ] && log_info "Visit https://docs.docker.com/get-docker/ for installation instructions."
         exit 1
     fi
 
-    # Check that Docker is running and the user has permissions to use it.
-    if ! run_with_timeout 10 "docker ps"; then
-        log_error "Docker is either not running or this user doesn't have permission to use Docker. Make sure Docker is started. If Docker is running, it is likely the user doesn't have permission to use Docker. Either run the script as root or contact your system administrator."
+    # Check that Docker/Podman is running and the user has permissions to use it.
+    if ! output=$(run_with_timeout 10 $container_tool ps); then
+        log_error "$container_tool is either not running or this user doesn't have permission to use $container_tool. Make sure $container_tool is started. If $container_tool is running, it is likely the user doesn't have permission to use $container_tool. Either run the script as root or contact your system administrator. Output:"
+        while IFS= read -r line; do
+            log_error "  $line"
+        done <<< "$output"
         exit 1
     fi
 
-    # Check if Docker Compose is installed.
-    if ! run_with_timeout 10 "docker compose version"; then
-        log_error "Docker is installed but Compose is not. Please install Docker Compose first."
-        log_info "Visit https://docs.docker.com/compose/install/ for installation instructions."
+    # Check if Docker Compose or Podman-Compose is installed.
+    if ! output=(run_with_timeout 10 $compose_tool version); then
+        log_error "$container_tool is installed but $compose_tool is not. Please install $compose_tool first. Output:"
+        while IFS= read -r line; do
+            log_error "  $line"
+        done <<< "$output"
+        [ "$container_tool" = "docker" ] && log_info "Visit https://docs.docker.com/compose/install/ for installation instructions."
         exit 1
     fi
 
-    # Check Docker Compose version.
-    compose_version=$(docker compose version --short 2>/dev/null || docker-compose --version | awk '{print $3}')
-    compose_version=$(echo "$compose_version" | sed 's/[^0-9.]*//g')
-    if ! version_ge "$MIN_COMPOSE_VERSION" "$compose_version"; then
-        log_error "Docker Compose version $compose_version is too old. Please install Docker Compose version $MIN_COMPOSE_VERSION or higher."
-        exit 1
-    fi
-
-    # Check curl.
-    if ! command_exists curl; then
-        log_error "curl is not installed. Please install curl first."
-        exit 1
-    fi
-
-    # Check for sufficient disk space (at least 1GB free).
-    if [ "$(df -P . | awk 'NR==2 {print $4}')" -lt 1048576 ]; then
-        log_error "Insufficient disk space. Please ensure at least 1GB of free space."
-        exit 1
-    fi
-
-    # Check network connectivity.
-    if ! curl -s --head --request GET ${DOWNLOAD_URL} | grep "200" >/dev/null; then
-        log_error "Network connectivity issue. Unable to reach ${DOWNLOAD_URL}."
-        exit 1
-    fi
-}
-
-# Check system requirements.
-check_requirements_podman() {
-    log_info "Checking system requirements."
-
-    # Check if podman is installed.
-    if ! command_exists podman; then
-        log_error "podman is not installed. Please install podman first."
-        exit 1
-    fi
-
-    # Check that podman is running and the user has permissions to use it.
-    if ! run_with_timeout 10 "podman ps"; then
-        log_error "podman is either not running or this user doesn't have permission to use podman. Make sure podman is started. If podman is running, it is likely the user doesn't have permission to use podman. Either run the script as root or contact your system administrator."
-        exit 1
-    fi
-
-    # Check if podman compose is installed.
-    if ! run_with_timeout 10 "podman-compose version"; then
-        log_error "podman is installed but compose is not. Please install podman-compose first."
-        exit 1
+    if [ "$container_tool" = "docker" ]; then
+        # Check Docker Compose version.
+        compose_version=$($compose_tool version --short 2>/dev/null || docker-compose --version | awk '{print $3}')
+        compose_version=$(echo "$compose_version" | sed 's/[^0-9.]*//g')
+        if ! version_ge "$MIN_COMPOSE_VERSION" "$compose_version"; then
+            log_error "Docker Compose version $compose_version is too old. Please install Docker Compose version $MIN_COMPOSE_VERSION or higher."
+            exit 1
+        fi
     fi
 
     # Check curl.
@@ -226,13 +210,6 @@ check_installation_dir() {
         log_error "Write permissions required in ${install_dir}".
         exit 1
     fi
-
-    # Check if .env file already exists
-    if [ -f .env ]; then
-        log_error "A .env file already exists. Installation aborted."
-        log_error "Please remove or rename the .env file or go to a different directory if you want to reinstall."
-        exit 1
-    fi
 }
 
 # Download config files.
@@ -248,9 +225,32 @@ download_config() {
     fi
 
     # Download env.template.
-    if ! curl -sSL "${url}/env.template" -o .env; then
-        log_warn "Failed to download a .env file."
+    if ! curl -sSL "${url}/env.template" -o env.template; then
+        log_warn "Failed to download an env.template file."
         exit 1
+    fi
+
+    if [ -f ".env" ]; then
+        EXISITING_ENV=1
+        changes=0
+        log_info "Checking for potentially new keys added to env.template since initial install."
+        log_info "This may help identify missing entries in .env, but some may be false positives."
+        while IFS= read -r line; do
+            case "$line" in
+                ''|\#*) continue ;;  # skip empty lines and comments
+            esac
+            key=$(printf "%s" "$line" | cut -d '=' -f 1)
+            if ! grep -q "^$key=" .env; then
+                log_warn "Key '$key' is present in env.template but not found in .env. If this key is new, consider adding it:"
+                log_warn "$line"
+                changes=1
+            fi
+        done < env.template
+        rm -f env.template
+        [ "$changes" -eq 0 ] && log_info "No new keys were detected."
+    else
+        log_info "Creating .env file from env.template."
+        mv env.template .env
     fi
 
     # Set appropriate permissions.
@@ -266,6 +266,12 @@ download_config() {
 # .env file or a default value.  Note that these variables do NOT affect the
 # docker containers.  They get their values strictly from the .env file.
 set_variables() {
+    if [ "$EXISITING_ENV" -eq 1 ]; then
+        log_info "Existing .env file found. Ignoring any new configuration values passed to the script."
+        log_info "To apply new values, edit the .env file manually."
+        return
+    fi
+
     log_info "Setting up .env configuration file."
 
     if grep -q '^#MC_PORT=' .env && [ "$HTTP_PORT" != "$DEFAULT_HTTP_PORT" ]; then
@@ -279,10 +285,9 @@ set_variables() {
     fi
 
     # Determine if SSL is being used to serve Mission Control.
-    USE_SSL=0
     if grep -q '^MC_SSL_PUBLIC_CERT=' .env &&
        grep -q '^MC_SSL_PRIVATE_KEY=' .env; then
-        USE_SSL=1
+       USE_SSL=1
     fi
 
     # Check if xgt.lic license file exists
@@ -297,50 +302,76 @@ set_variables() {
     fi
 }
 
-# Check for port conflicts.
-check_ports() {
-    log_info "Checking for port conflicts."
+deploy_containers() {
+    local container_tool="$1"
+    local compose_tool="$2"
+    local arch="$3"
 
-    ports_to_check="${HTTP_PORT}"
-    if [ "$USE_SSL" -eq 1 ]; then
-        ports_to_check="${ports_to_check} ${HTTPS_PORT}"
+    if [ "$arch" = "ppc64le" ]; then
+        export MC_MONGODB_IMAGE=ibmcom/mongodb-ppc64le
+        portable_sed_i 's|^#MC_MONGODB_IMAGE=mongo:latest|MC_MONGODB_IMAGE=ibmcom/mongodb-ppc64le|' .env
     fi
 
-    for port in ${ports_to_check}; do
-        if port_in_use "$port"; then
-            log_warn "Port $port is already in use. Please stop the existing service or specify a different port."
-            log_warn "To specify a different port, see the --http-port, --https-port, and --xgt-port options in the Installation help."
-            exit 1
-        fi
-    done
-}
-
-# Pull and start containers.
-deploy_containers_docker() {
     log_info "Pulling latest container images."
-    if ! output=$(run_with_timeout 300 docker compose pull 2>&1); then
-        log_error "Failed to pull container images. Error: $output"
+    if ! output=$(run_with_timeout 300 $compose_tool pull); then
+        log_error "Failed to pull container images. Output:"
+        while IFS= read -r line; do
+            log_error "  $line"
+        done <<< "$output"
         exit 1
     fi
 
+    if [ "$arch" = "ppc64le" ]; then
+        # Ensure volume exists
+        if ! $container_tool volume inspect rocketgraph_mongodb-data >/dev/null 2>&1; then
+            log_info "Creating MongoDB volume..."
+            if ! $container_tool volume create rocketgraph_mongodb-data >/dev/null 2>&1; then
+                log_error "Failed to create MongoDB volume."
+            fi
+        fi
+
+        # Fix permissions on the volume for MongoDB
+        log_info "Setting correct permissions on MongoDB volume..."
+        if ! $container_tool unshare chown -R 999:999 "$(podman volume inspect rocketgraph_mongodb-data -f '{{.Mountpoint}}')" >/dev/null 2>&1; then
+            log_error "Failed to set permissions on MongoDB volume."
+        fi
+
+        # Check if there are existing containers that need to be removed
+        if $container_tool ps -a --format "{{.Names}}" | grep -q "rocketgraph_"; then
+            log_info "Removing existing Rocketgraph containers..."
+            $compose_tool down >/dev/null 2>&1
+        fi
+    fi
     log_info "Starting containers."
-    if ! output=$(docker compose up -d 2>&1); then
-        log_error "Failed to start containers. Error: $output"
+    tmpfile=$(mktemp)
+    if ! $compose_tool up -d >"$tmpfile" 2>&1; then
+        log_error "Failed to start containers. Output:"
+        while IFS= read -r line; do
+            log_error "  $line"
+        done < "$tmpfile"
+        rm -f "$tmpfile"
         exit 1
+    fi
+    rm -f "$tmpfile"
+
+    if [ "$container_tool" = "podman" ]; then
+        if ! loginctl enable-linger >/dev/null 2>&1; then
+            log_error "Failed to enable linger for user sessions."
+        fi
     fi
 
     # Try to extract templates from a running container first
-    container_id=$(docker ps --filter "ancestor=rocketgraph/mission-control-backend:latest" --format "{{.ID}}" | head -n 1)
+    container_id=$($container_tool ps --filter "ancestor=rocketgraph/mission-control-backend:latest" --format "{{.ID}}" | head -n 1)
 
     if [ -n "$container_id" ]; then
-        if docker cp "${container_id}:/app/templates" ./ >/dev/null 2>&1; then
+        if $container_tool cp "${container_id}:/app/templates" ./ >/dev/null 2>&1; then
             log_info "Site-config templates extracted successfully from running container."
         else
             log_info "No templates found or failed to copy from running container. Skipping."
         fi
     else
         # Fall back to running a temporary container
-        if docker run --rm -v "$(pwd):/output" rocketgraph/mission-control-backend:latest \
+        if $container_tool run --rm -v "$(pwd):/output" rocketgraph/mission-control-backend:latest \
             sh -c 'cp -r /app/templates /output/' >/dev/null 2>&1; then
             log_info "Site-config templates extracted successfully from fresh container."
         else
@@ -349,88 +380,50 @@ deploy_containers_docker() {
     fi
 }
 
-# Pull and start containers.
-deploy_containers_podman() {
-    # Set the MongoDB image for Power architecture
-    export MC_MONGODB_IMAGE=ibmcom/mongodb-ppc64le
-    portable_sed_i 's|^#MC_MONGODB_IMAGE=mongo:latest|MC_MONGODB_IMAGE=ibmcom/mongodb-ppc64le|' .env
-
-    log_info "Pulling latest container images."
-    if ! output=$(run_with_timeout 300 podman-compose pull 2>&1); then
-        log_error "Failed to pull container images. Error: $output"
-        exit 1
-    fi
-
-    # Ensure volume exists
-    if ! podman volume inspect rocketgraph_mongodb-data >/dev/null 2>&1; then
-        log_info "Creating MongoDB volume..."
-        if ! podman volume create rocketgraph_mongodb-data >/dev/null 2>&1; then
-            log_error "Failed to create MongoDB volume."
-        fi
-    fi
-
-    # Fix permissions on the volume for MongoDB
-    log_info "Setting correct permissions on MongoDB volume..."
-    if ! podman unshare chown -R 999:999 "$(podman volume inspect rocketgraph_mongodb-data -f '{{.Mountpoint}}')" >/dev/null 2>&1; then
-        log_error "Failed to set permissions on MongoDB volume."
-    fi
-
-    # Check if there are existing containers that need to be removed
-    if podman ps -a --format "{{.Names}}" | grep -q "rocketgraph_"; then
-        log_info "Removing existing Rocketgraph containers..."
-        podman-compose down >/dev/null 2>&1
-    fi
-    # Start the services
-    log_info "Starting Rocketgraph services with Podman..."
-    # podman-compose up -d
-    podman-compose up -d mongodb
-    sleep 3
-    podman-compose up -d backend
-    sleep 5
-    podman-compose up -d xgt
-    sleep 3
-    podman-compose up -d frontend
-
-    # Allow user to log off and keep containers running
-    if ! loginctl enable-linger >/dev/null 2>&1; then
-        log_error "Failed to enable linger for user sessions."
-    fi
-    log_info "Rocketgraph startup complete. Check status with: podman-compose ps"
-
-    # Extract site-config templates if they exist in the container
-    if podman run --rm -v $(pwd):/output rocketgraph/mission-control-backend:latest sh -c 'if [ -d /app/templates ]; then cp -r /app/templates /output/; else exit 1; fi' >/dev/null 2>&1; then
-        log_info "Site-config templates extracted successfully."
-    elif podman run --rm -v $(pwd):/output rocketgraph/mission-control-backend:latest sh -c '[ -d /app/templates ]' >/dev/null 2>&1; then
-        log_error "Failed to extract site-config templates."
-    fi
-}
-
 # Main installation process.
 main() {
     log_info "Starting installation process."
 
-    if [ $(uname -m) = "ppc64le" ]; then
-        check_requirements_podman
-    else
-        check_requirements_docker
+    command_exists docker && has_docker=1 || has_docker=0
+    command_exists podman && has_podman=1 || has_podman=0
+
+    if [ "$USE_PODMAN" = "1" ] && [ "$has_docker" = "1" ] && [ "$has_podman" = "0" ]; then
+        USE_PODMAN=0
+        log_warn "Podman is not installed. Docker found. Falling back to Docker."
     fi
+
+    if [ "$USE_PODMAN" = "0" ] && [ "$has_docker" = "0" ] && [ "$has_podman" = "1" ]; then
+        USE_PODMAN=1
+        log_info "Docker is not installed. Podman found. Falling back to Podman."
+    fi
+
+    arch=$(uname -m)
+
+    if [ "$USE_PODMAN" = "1" ]; then
+        check_requirements podman podman-compose
+    else
+        check_requirements docker "docker compose"
+    fi
+
     check_installation_dir
     download_config
     set_variables
-    check_ports
-    if [ $(uname -m) = "ppc64le" ]; then
-        deploy_containers_podman
+
+    if [ "$USE_PODMAN" = "1" ]; then
+        deploy_containers podman podman-compose $arch
     else
-        deploy_containers_docker
+        deploy_containers docker "docker compose" $arch
     fi
 
     log_info "Installation completed successfully!"
+
     if [ "$USE_SSL" -eq 1 ]; then
       log_info "Mission Control is now running at https://localhost:${HTTPS_PORT}"
     else
       log_info "Mission Control is now running at http://localhost:${HTTP_PORT}"
     fi
-    if [ $(uname -m) = "ppc64le" ]; then
+
+    if [ "$USE_PODMAN" = "1" ]; then
         log_info "To check the status, run: podman-compose ps"
         log_info "To view logs, run: podman-compose logs"
     else

@@ -118,7 +118,7 @@ run_with_timeout() {
     local tmpfile
     tmpfile=$(mktemp)
 
-    # Run the command, capture output silently
+    # Run the command in the background, capture stdout/stderr
     "$@" >"$tmpfile" 2>&1 &
     local pid=$!
 
@@ -131,14 +131,14 @@ run_with_timeout() {
     if kill -0 "$pid" 2>/dev/null; then
         kill -TERM "$pid"
         wait "$pid" 2>/dev/null
-        cat "$tmpfile"
+        _run_with_timeout_output=$(cat "$tmpfile")
         rm -f "$tmpfile"
         return 124  # Timeout
     fi
 
     wait "$pid"
     local code=$?
-    cat "$tmpfile"
+    _run_with_timeout_output=$(cat "$tmpfile")
     rm -f "$tmpfile"
     return $code
 }
@@ -157,18 +157,18 @@ check_requirements() {
     fi
 
     # Check that Docker/Podman is running and the user has permissions to use it.
-    if ! output=$(run_with_timeout 10 $container_tool ps); then
+    if ! run_with_timeout 10 "$container_tool" ps; then
         log_error "$container_tool is either not running or this user doesn't have permission to use $container_tool. Make sure $container_tool is started. If $container_tool is running, it is likely the user doesn't have permission to use $container_tool. Either run the script as root or contact your system administrator. Output:"
-        printf '%s\n' "$output" | while IFS= read -r line; do
+        printf '%s\n' "$_run_with_timeout_output" | while IFS= read -r line; do
             log_error "  $line"
         done
         exit 1
     fi
 
     # Check if Docker Compose or Podman-Compose is installed.
-    if ! output=$(run_with_timeout 10 $compose_tool version); then
+    if ! run_with_timeout 10 $compose_tool version; then
         log_error "$container_tool is installed but $compose_tool is not. Please install $compose_tool first. Output:"
-        printf '%s\n' "$output" | while IFS= read -r line; do
+        printf '%s\n' "$_run_with_timeout_output" | while IFS= read -r line; do
             log_error "  $line"
         done
         [ "$container_tool" = "docker" ] && log_info "Visit https://docs.docker.com/compose/install/ for installation instructions."
@@ -316,9 +316,9 @@ deploy_containers() {
     fi
 
     log_info "Pulling latest container images."
-    if ! output=$(run_with_timeout 300 $compose_tool pull); then
+    if ! run_with_timeout 300 $compose_tool pull; then
         log_error "Failed to pull container images. Output:"
-        printf '%s\n' "$output" | while IFS= read -r line; do
+        printf '%s\n' "$_run_with_timeout_output" | while IFS= read -r line; do
             log_error "  $line"
         done
         exit 1

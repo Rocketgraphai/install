@@ -5,7 +5,7 @@ function Write-InfoLog { param($Message) Write-Host "[INFO] $Message" -Foregroun
 function Write-WarnLog { param($Message) Write-Host "[WARN] $Message" -ForegroundColor Yellow }
 function Write-ErrorLog { param($Message) Write-Host "[ERROR] $Message" -ForegroundColor Red }
 
-$ScriptVersion = "1.4.2"
+$ScriptVersion = "1.4.3"
 Write-InfoLog "Running Script Version $ScriptVersion"
 
 for ($i = 0; $i -lt $args.Count; $i++) {
@@ -46,6 +46,10 @@ $LAUNCH_BROWSER = $true
 
 # Install docker if it's not installed'
 $INSTALL_DOCKER = $true
+
+$EXISTING_ENV = $false
+
+$USE_SSL = $false
 
 # Function to display help
 function Show-Help {
@@ -394,7 +398,7 @@ function Test-Requirements {
     # Ensure Docker is running
     Write-InfoLog "Ensuring Docker is running..."
 
-    $dockerRunning = & docker info > $null 2>&1
+    & docker info > $null 2>&1
 
     if ($LASTEXITCODE -ne 0) {
         if(-not $isWindowsPlat) {
@@ -482,18 +486,6 @@ function Test-Settings {
         Write-ErrorLog "Missing license file at: $LICENSE_LOCATION (custom path)"
         Exit-Script 1
     }
-
-    $portsToCheck = @(
-        $HTTP_PORT,
-        $XGT_PORT
-    )
-
-    foreach ($port in $portsToCheck) {
-        if (Test-PortInUse $port) {
-            Write-ErrorLog "Port $port is already in use. Please stop the existing service or specify a different port."
-            Exit-Script 1
-        }
-    }
 }
 
 # Create installation directory
@@ -504,6 +496,12 @@ function Initialize-InstallationDirectory {
 }
 
 function Set-EnvVariables {
+   if ($EXISTING_ENV -eq 1) {
+        Write-InfoLog "Existing .env file found. Ignoring any new configuration values passed to the script."
+        Write-InfoLog "To apply new values, edit the .env file manually."
+        return
+    }
+
     Write-InfoLog "Setting up .env configuration file..."
 
     $envFile = ".env"
@@ -564,18 +562,31 @@ function Get-ConfigurationFiles {
     try {
         Invoke-WebRequest "${downloadUrl}/env.template" -OutFile "env.template"
         if (Test-Path ".env") {
-            Write-InfoLog "Merging env.template with existing .env file..."
+            $EXISTING_ENV = $true
+            $changes = $false
+            Write-InfoLog "Checking for potentially new keys added to env.template since initial install."
+            Write-InfoLog "This may help identify missing entries in .env, but some may be false positives."
+            
             $existing = Get-Content ".env"
             $template = Get-Content "env.template"
+
             foreach ($line in $template) {
+                if ($line -match '^\s*$|^\s*#') { continue }  # Skip empty lines and comments
+                
                 $key = ($line -split '=')[0]
                 if (-not ($existing -match "^$key=")) {
-                    Add-Content ".env" $line
+                    Write-WarnLog "Key '$key' is present in env.template but not found in .env. If this key is new, consider adding it:"
+                    Write-WarnLog $line
+                    $changes = $true
                 }
             }
-        }
-        else {
-            Write-InfoLog "Creating .env file from env.template..."
+
+            Remove-Item "env.template"
+            if (-not $changes) {
+                Write-InfoLog "No new keys were detected."
+            }
+        } else {
+            Write-InfoLog "Creating .env file from env.template."
             Move-Item -Path "env.template" -Destination ".env"
         }
     }
@@ -641,20 +652,24 @@ function Start-Installation {
     if ($LAUNCH_BROWSER) {
         Write-InfoLog "Launching browser..."
         $timeout = 30
-        $portReady = $false
 
         for ($i = 0; $i -lt $timeout; $i++) {
             try {
                 $tcpClient = New-Object System.Net.Sockets.TcpClient
                 $tcpClient.Connect("localhost", $HTTP_PORT)
                 $tcpClient.Close()
-                $portReady = $true
                 break
             } catch {
                 Start-Sleep -Seconds 1
             }
         }
-        Start-Process "http://localhost:$HTTP_PORT"
+        if ($USE_SSL -eq $true) {
+            # Start the process on HTTPS
+            Start-Process "https://localhost:$HTTPS_PORT"
+        } else {
+            # Start the process on HTTP
+            Start-Process "http://localhost:$HTTP_PORT"
+        }
     }
 }
 
@@ -663,6 +678,7 @@ try {
     Start-Installation
 } catch {
     Write-ErrorLog "Script error: $_"
+    exit 1
 } finally {
     if ($PAUSE_AT_END) {
         Read-Host "Press Enter to exit..."

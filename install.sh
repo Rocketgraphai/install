@@ -316,13 +316,7 @@ deploy_containers() {
     fi
 
     log_info "Pulling latest container images."
-    if ! run_with_timeout 300 $compose_tool pull; then
-        log_error "Failed to pull container images. Output:"
-        printf '%s\n' "$_run_with_timeout_output" | while IFS= read -r line; do
-            log_error "  $line"
-        done
-        exit 1
-    fi
+    $compose_tool pull
 
     if [ "$arch" = "ppc64le" ]; then
         # Ensure volume exists
@@ -345,19 +339,16 @@ deploy_containers() {
             $compose_tool down >/dev/null 2>&1
         fi
     fi
+
     log_info "Starting containers."
-    tmpfile=$(mktemp)
-    if ! $compose_tool up -d >"$tmpfile" 2>&1; then
-        log_error "Failed to start containers. Output:"
-        while IFS= read -r line; do
-            log_error "  $line"
-        done < "$tmpfile"
-        rm -f "$tmpfile"
-        log_error ""
+    set +e
+    $compose_tool up -d
+    # Check if the command failed
+    if [ $? -ne 0 ]; then
         log_error "If a port is already in use, you may need to change it in the .env file (e.g., MC_PORT (default: 80), MC_SSL_PORT (default: 443), etc.), then rerun the install."
-        exit 1
+        exit 1  # Exit the script with an error code
     fi
-    rm -f "$tmpfile"
+    set -e
 
     if [ "$container_tool" = "podman" ]; then
         if ! loginctl enable-linger >/dev/null 2>&1; then

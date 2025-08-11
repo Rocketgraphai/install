@@ -23,7 +23,7 @@ ENTERPRISE_INSTALL=0
 EXISITING_ENV=0
 USE_SSL=0
 USE_PODMAN=0
-DOCKER_COMPOSE="docker compsoe"
+DOCKER_COMPOSE="docker compose"
 
 # Parse command line options
 while [ $# -gt 0 ]; do

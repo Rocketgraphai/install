@@ -73,7 +73,7 @@ while [ $# -gt 0 ]; do
 done
 
 # Minimum required Docker Compose version.
-MIN_COMPOSE_VERSION="1.29.0"
+MIN_COMPOSE_VERSION="1.25.0"
 
 DOWNLOAD_URL="https://github.com/Rocketgraphai/rocketgraph"
 
@@ -405,7 +405,7 @@ main() {
             DOCKER_COMPOSE="docker-compose"
         fi
 
-        check_requirements docker $DOCKER_COMPOSE
+        check_requirements docker "$DOCKER_COMPOSE"
     fi
 
     check_installation_dir
@@ -415,7 +415,7 @@ main() {
     if [ "$USE_PODMAN" = "1" ]; then
         deploy_containers podman podman-compose $arch
     else
-        deploy_containers docker $DOCKER_COMPOSE $arch
+        deploy_containers docker "$DOCKER_COMPOSE" $arch
     fi
 
     log_info "Installation completed successfully!"

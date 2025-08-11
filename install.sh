@@ -23,6 +23,7 @@ ENTERPRISE_INSTALL=0
 EXISITING_ENV=0
 USE_SSL=0
 USE_PODMAN=0
+DOCKER_COMPOSE="docker compsoe"
 
 # Parse command line options
 while [ $# -gt 0 ]; do
@@ -407,7 +408,13 @@ main() {
     if [ "$USE_PODMAN" = "1" ]; then
         check_requirements podman podman-compose
     else
-        check_requirements docker "docker compose"
+        if command_exists docker && docker compose version >/dev/null 2>&1; then
+            DOCKER_COMPOSE="docker compose"
+        else
+            DOCKER_COMPOSE="docker-compose"
+        fi
+
+        check_requirements docker $DOCKER_COMPOSE
     fi
 
     check_installation_dir
@@ -417,7 +424,7 @@ main() {
     if [ "$USE_PODMAN" = "1" ]; then
         deploy_containers podman podman-compose $arch
     else
-        deploy_containers docker "docker compose" $arch
+        deploy_containers docker $DOCKER_COMPOSE $arch
     fi
 
     log_info "Installation completed successfully!"
@@ -432,8 +439,8 @@ main() {
         log_info "To check the status, run: podman-compose ps"
         log_info "To view logs, run: podman-compose logs"
     else
-        log_info "To check the status, run: docker compose ps"
-        log_info "To view logs, run: docker compose logs"
+        log_info "To check the status, run: $DOCKER_COMPOSE ps"
+        log_info "To view logs, run: $DOCKER_COMPOSE logs"
     fi
 }
 

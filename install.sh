@@ -23,6 +23,8 @@ ENTERPRISE_INSTALL=0
 EXISITING_ENV=0
 USE_SSL=0
 USE_PODMAN=0
+DOCKER_COMPOSE_VERSION=2
+DOCKER_COMPOSE="docker compose"
 
 # Parse command line options
 while [ $# -gt 0 ]; do
@@ -72,7 +74,7 @@ while [ $# -gt 0 ]; do
 done
 
 # Minimum required Docker Compose version.
-MIN_COMPOSE_VERSION="1.29.0"
+MIN_COMPOSE_VERSION="1.25.0"
 
 DOWNLOAD_URL="https://github.com/Rocketgraphai/rocketgraph"
 
@@ -225,6 +227,13 @@ download_config() {
     if ! curl -sSL "${url}/docker-compose.yml" -o docker-compose.yml; then
         log_error "Failed to download docker-compose.yml."
         exit 1
+    fi
+
+    # Remove unsupported 'name' key for Docker Compose v1.
+    # This is set via the COMPOSE_PROJECT_NAME environment variable.
+    if [ "${DOCKER_COMPOSE_VERSION}" = "1" ]; then
+        log_info "Docker compose v1 detected: updating the yml to be compatible with v1."
+        sed -i '/^name:[[:space:]]*\(${COMPOSE_PROJECT_NAME:-rocketgraph}\|rocketgraph\)/{N;/\n[[:space:]]*$/d;}' docker-compose.yml
     fi
 
     # Download env.template.
@@ -398,7 +407,14 @@ main() {
     if [ "$USE_PODMAN" = "1" ]; then
         check_requirements podman podman-compose
     else
-        check_requirements docker "docker compose"
+        if command_exists docker && docker compose version >/dev/null 2>&1; then
+            DOCKER_COMPOSE="docker compose"
+        else
+            DOCKER_COMPOSE="docker-compose"
+            DOCKER_COMPOSE_VERSION=1
+        fi
+
+        check_requirements docker "$DOCKER_COMPOSE"
     fi
 
     check_installation_dir
@@ -408,7 +424,7 @@ main() {
     if [ "$USE_PODMAN" = "1" ]; then
         deploy_containers podman podman-compose $arch
     else
-        deploy_containers docker "docker compose" $arch
+        deploy_containers docker "$DOCKER_COMPOSE" $arch
     fi
 
     log_info "Installation completed successfully!"
@@ -423,8 +439,8 @@ main() {
         log_info "To check the status, run: podman-compose ps"
         log_info "To view logs, run: podman-compose logs"
     else
-        log_info "To check the status, run: docker compose ps"
-        log_info "To view logs, run: docker compose logs"
+        log_info "To check the status, run: $DOCKER_COMPOSE ps"
+        log_info "To view logs, run: $DOCKER_COMPOSE logs"
     fi
 }
 

@@ -23,6 +23,7 @@ ENTERPRISE_INSTALL=0
 EXISITING_ENV=0
 USE_SSL=0
 USE_PODMAN=0
+DOCKER_COMPOSE_VERSION=2
 DOCKER_COMPOSE="docker compose"
 
 # Parse command line options
@@ -228,6 +229,13 @@ download_config() {
         exit 1
     fi
 
+    # Remove unsupported 'name' key for Docker Compose v1.
+    # This is set via the COMPOSE_PROJECT_NAME environment variable.
+    if [ "${DOCKER_COMPOSE_VERSION}" = "1" ]; then
+        log_info "Docker compose v1 detected: updating the yml to be compatible with v1."
+        sed -i '/^name:[[:space:]]\${COMPOSE_PROJECT_NAME:-rocketgraph}/{N;/\n[[:space:]]*$/d;}' docker-compose.yml
+    fi
+
     # Download env.template.
     if ! curl -sSL "${url}/env.template" -o env.template; then
         log_warn "Failed to download an env.template file."
@@ -403,6 +411,7 @@ main() {
             DOCKER_COMPOSE="docker compose"
         else
             DOCKER_COMPOSE="docker-compose"
+            DOCKER_COMPOSE_VERSION=1
         fi
 
         check_requirements docker "$DOCKER_COMPOSE"

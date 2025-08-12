@@ -233,7 +233,7 @@ download_config() {
     # This is set via the COMPOSE_PROJECT_NAME environment variable.
     if [ "${DOCKER_COMPOSE_VERSION}" = "1" ]; then
         log_info "Docker compose v1 detected: updating the yml to be compatible with v1."
-        sed -i '/^name:[[:space:]]\${COMPOSE_PROJECT_NAME:-rocketgraph}/{N;/\n[[:space:]]*$/d;}' docker-compose.yml
+        sed -i '/^name:[[:space:]]*\(${COMPOSE_PROJECT_NAME:-rocketgraph}\|rocketgraph\)/{N;/\n[[:space:]]*$/d;}' docker-compose.yml
     fi
 
     # Download env.template.

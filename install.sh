@@ -74,7 +74,7 @@ while [ $# -gt 0 ]; do
 done
 
 # Minimum required Docker Compose version.
-MIN_COMPOSE_VERSION="1.25.0"
+MIN_COMPOSE_VERSION="1.27.0"
 
 DOWNLOAD_URL="https://github.com/Rocketgraphai/rocketgraph"
 

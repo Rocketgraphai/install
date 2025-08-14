@@ -81,10 +81,19 @@ parse_args() {
         -h|--help)
         # Default ports may change based on the container tool used.
         detect_container_tool
+
+        if [ "$ROOTLESS_INSTALL" -eq 1 ]; then
+            http_port_default=$DEFAULT_HTTP_USER_PORT
+            https_port_default=$DEFAULT_HTTPS_USER_PORT
+        else
+            http_port_default=$DEFAULT_HTTP_PORT
+            https_port_default=$DEFAULT_HTTPS_PORT
+        fi
+
         echo "Usage: $0 [OPTIONS]"
         echo "Available options:"
-        echo "  --http-port PORT   Specify custom HTTP port (default: $DEFAULT_HTTP_PORT)"
-        echo "  --https-port PORT  Specify custom HTTPS port (default: $DEFAULT_HTTPS_PORT)"
+        echo "  --http-port PORT   Specify custom HTTP port (default: $http_port_default)"
+        echo "  --https-port PORT  Specify custom HTTPS port (default: $https_port_default)"
         echo "  --enterprise       Enable multi-user enterprise installation"
         echo "  --use-podman       Use Podman instead of Docker, falling back to Docker if Podman is not installed"
         echo "  -h, --help         Show this help message"
@@ -417,13 +426,11 @@ detect_container_tool() {
 
     if [ "$USE_PODMAN" = "1" ] || docker info --format '{{.SecurityOptions}}' 2>/dev/null | grep -q rootless; then
         ROOTLESS_INSTALL=1
-        DEFAULT_HTTP_PORT=$DEFAULT_USER_HTTP_PORT
-        DEFAULT_HTTPS_PORT=$DEFAULT_USER_HTTPS_PORT
         # Update ports if the user didn't specify them.
-        if [ "$HTTP_PORT_SET" = "1" ]; then
+        if [ "$HTTP_PORT_SET" = "0" ]; then
             HTTP_PORT=$DEFAULT_USER_HTTP_PORT
         fi
-        if [ "$HTTPS_PORT_SET" = "1" ]; then
+        if [ "$HTTPS_PORT_SET" = "0" ]; then
             HTTPS_PORT=$DEFAULT_USER_HTTPS_PORT
         fi
         log_info "Rootless installation detected."

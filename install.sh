@@ -36,6 +36,56 @@ ROOTLESS_INSTALL=0
 DOCKER_COMPOSE_VERSION=2
 DOCKER_COMPOSE="docker compose"
 
+<<<<<<< Updated upstream
+=======
+# Parse command line options
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --http-port)
+      if [ $# -ge 2 ] && [ -n "$2" ] && [ "${2#-}" = "$2" ]; then
+        HTTP_PORT=$2
+        shift 2
+      else
+        log_error "Error: Argument for $1 is missing"
+        exit 1
+      fi
+      ;;
+    --https-port)
+      if [ $# -ge 2 ] && [ -n "$2" ] && [ "${2#-}" = "$2" ]; then
+        HTTPS_PORT=$2
+        shift 2
+      else
+        log_error "Error: Argument for $1 is missing"
+        exit 1
+      fi
+      ;;
+    --enterprise)
+      ENTERPRISE_INSTALL=1
+      shift 1
+      ;;
+    --use-podman)
+      USE_PODMAN=1
+      shift
+      ;;
+    -h|--help)
+      echo "Usage: $0 [OPTIONS]"
+      echo "Available options:"
+      echo "  --http-port PORT   Specify custom HTTP port (default: $DEFAULT_HTTP_PORT)"
+      echo "  --https-port PORT  Specify custom HTTPS port (default: $DEFAULT_HTTPS_PORT)"
+      echo "  --enterprise       Enable multi-user enterprise installation"
+      echo "  --use-podman       Use Podman instead of Docker, falling back to Docker if Podman is not installed"
+      echo "  -h, --help         Show this help message"
+      exit 0
+      ;;
+    *)
+      log_error "Unknown option: $1"
+      echo "Use -h or --help to see available options"
+      exit 1
+      ;;
+  esac
+done
+
+>>>>>>> Stashed changes
 # Minimum required Docker Compose version.
 MIN_COMPOSE_VERSION="1.27.0"
 

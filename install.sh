@@ -15,63 +15,26 @@ NC='\033[0m' # No Color.
 DEFAULT_HTTP_PORT=80
 DEFAULT_HTTPS_PORT=443
 
+# Default ports for user access without root privileges.
+# Used for podman or rootless docker installations.
+DEFAULT_USER_HTTP_PORT=8080
+DEFAULT_USER_HTTPS_PORT=8443
+
 # Initialize variables with default values
 HTTP_PORT=$DEFAULT_HTTP_PORT
 HTTPS_PORT=$DEFAULT_HTTPS_PORT
 ENTERPRISE_INSTALL=0
 
+# Did the user specify a custom HTTP or HTTPS port?
+HTTP_PORT_SET=0
+HTTPS_PORT_SET=0
+
 EXISITING_ENV=0
 USE_SSL=0
 USE_PODMAN=0
+ROOTLESS_INSTALL=0
 DOCKER_COMPOSE_VERSION=2
 DOCKER_COMPOSE="docker compose"
-
-# Parse command line options
-while [ $# -gt 0 ]; do
-  case "$1" in
-    --http-port)
-      if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
-        HTTP_PORT=$2
-        shift 2
-      else
-        log_error "Error: Argument for $1 is missing"
-        exit 1
-      fi
-      ;;
-    --https-port)
-      if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
-        HTTPS_PORT=$2
-        shift 2
-      else
-        log_error "Error: Argument for $1 is missing"
-        exit 1
-      fi
-      ;;
-    --enterprise)
-      ENTERPRISE_INSTALL=1
-      shift 1
-      ;;
-    --use-podman)
-      USE_PODMAN=1
-      shift
-      ;;
-    -h|--help)
-      echo "Usage: $0 [OPTIONS]"
-      echo "Available options:"
-      echo "  --http-port PORT   Specify custom HTTP port (default: $DEFAULT_HTTP_PORT)"
-      echo "  --https-port PORT  Specify custom HTTPS port (default: $DEFAULT_HTTPS_PORT)"
-      echo "  --enterprise       Enable multi-user enterprise installation"
-      echo "  --use-podman       Use Podman instead of Docker, falling back to Docker if Podman is not installed"
-      echo "  -h, --help         Show this help message"
-      exit 0
-      ;;
-    *)
-      log_error "Unknown option: $1"
-      echo "Use -h or --help to see available options"
-      exit 1
-      ;;
-  esac
-done
 
 # Minimum required Docker Compose version.
 MIN_COMPOSE_VERSION="1.27.0"
@@ -82,6 +45,59 @@ DOWNLOAD_URL="https://github.com/Rocketgraphai/rocketgraph"
 log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
+
+parse_args() {
+    # Parse command line options
+    while [ $# -gt 0 ]; do
+    case "$1" in
+        --http-port)
+        if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
+            HTTP_PORT=$2
+            HTTP_PORT_SET=1
+            shift 2
+        else
+            log_error "Error: Argument for $1 is missing"
+            exit 1
+        fi
+        ;;
+        --https-port)
+        if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
+            HTTPS_PORT=$2
+            HTTPS_PORT_SET=1
+            shift 2
+        else
+            log_error "Error: Argument for $1 is missing"
+            exit 1
+        fi
+        ;;
+        --enterprise)
+        ENTERPRISE_INSTALL=1
+        shift 1
+        ;;
+        --use-podman)
+        USE_PODMAN=1
+        shift
+        ;;
+        -h|--help)
+        # Default ports may change based on the container tool used.
+        detect_container_tool
+        echo "Usage: $0 [OPTIONS]"
+        echo "Available options:"
+        echo "  --http-port PORT   Specify custom HTTP port (default: $DEFAULT_HTTP_PORT)"
+        echo "  --https-port PORT  Specify custom HTTPS port (default: $DEFAULT_HTTPS_PORT)"
+        echo "  --enterprise       Enable multi-user enterprise installation"
+        echo "  --use-podman       Use Podman instead of Docker, falling back to Docker if Podman is not installed"
+        echo "  -h, --help         Show this help message"
+        exit 0
+        ;;
+        *)
+        log_error "Unknown option: $1"
+        echo "Use -h or --help to see available options"
+        exit 1
+        ;;
+    esac
+    done
+}
 
 portable_sed_i() {
   # Usage: portable_sed_i 's|pattern|replacement|' filename
@@ -385,10 +401,7 @@ deploy_containers() {
     fi
 }
 
-# Main installation process.
-main() {
-    log_info "Starting installation process."
-
+detect_container_tool() {
     command_exists docker && has_docker=1 || has_docker=0
     command_exists podman && has_podman=1 || has_podman=0
 
@@ -401,6 +414,30 @@ main() {
         USE_PODMAN=1
         log_info "Docker is not installed. Podman found. Falling back to Podman."
     fi
+
+    if [ "$USE_PODMAN" = "1" ] || docker info --format '{{.SecurityOptions}}' 2>/dev/null | grep -q rootless; then
+        ROOTLESS_INSTALL=1
+        DEFAULT_HTTP_PORT=$DEFAULT_USER_HTTP_PORT
+        DEFAULT_HTTPS_PORT=$DEFAULT_USER_HTTPS_PORT
+        # Update ports if the user didn't specify them.
+        if [ "$HTTP_PORT_SET" = "1" ]; then
+            HTTP_PORT=$DEFAULT_USER_HTTP_PORT
+        fi
+        if [ "$HTTPS_PORT_SET" = "1" ]; then
+            HTTPS_PORT=$DEFAULT_USER_HTTPS_PORT
+        fi
+        log_info "Rootless installation detected."
+    fi
+}
+
+# Main installation process.
+main() {
+    # Handle command line arguments.
+    parse_args "$@"
+    
+    log_info "Starting installation process."
+
+    detect_container_tool
 
     arch=$(uname -m)
 
@@ -445,4 +482,4 @@ main() {
 }
 
 # Run main function.
-main
+main "$@"

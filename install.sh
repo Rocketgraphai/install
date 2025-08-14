@@ -83,8 +83,8 @@ parse_args() {
         detect_container_tool
 
         if [ "$ROOTLESS_INSTALL" -eq 1 ]; then
-            http_port_default=$DEFAULT_HTTP_USER_PORT
-            https_port_default=$DEFAULT_HTTPS_USER_PORT
+            http_port_default=$DEFAULT_USER_HTTP_PORT
+            https_port_default=$DEFAULT_USER_HTTPS_PORT
         else
             http_port_default=$DEFAULT_HTTP_PORT
             https_port_default=$DEFAULT_HTTPS_PORT

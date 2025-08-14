@@ -71,7 +71,7 @@ Rocketgraph **requires** a container platform:
   📌 *If you want to install Rocketgraph in a specific location, run the script from that directory.*
 - Download and start **four separate containers** using [Docker Compose](https://docs.docker.com/compose).
 - Once installation is complete, the application will be available at **<http://localhost>**.  
-  If running with Podman or Rootless Docker, the application will be preconfigured to run on **[http://localhost:8080](http://localhost:8080)**.
+  If running with Podman or Rootless Docker, the application will be preconfigured to run on **<http://localhost:8080>**.
 
 ### Customizing Ports (Optional)
 

@@ -56,7 +56,7 @@ Rocketgraph **requires** a container platform:
 - Set up the necessary Docker Compose files (docker-compose.yml, .env).
 - Start Docker Desktop.
 - Download and launch the Rocketgraph containers.
-- Automatically open your default browser to http://localhost and the port chosen when setup completes.
+- Automatically opens your default browser to http://localhost and the port chosen when setup completes.
 
 #### On macOS, the graphical installer (.pkg)/scripts will:
 
@@ -70,8 +70,8 @@ Rocketgraph **requires** a container platform:
 - Install the necessary Docker Compose files (**`.yml`** and **`.env`**) in the directory where they are run.
   📌 *If you want to install Rocketgraph in a specific location, run the script from that directory.*
 - Download and start **four separate containers** using [Docker Compose](https://docs.docker.com/compose).
-- The application will be available at **[http://localhost](http://localhost)** once the installation is complete.
-
+- Once installation is complete, the application will be available at **<http://localhost>**.  
+  If running with Podman or Rootless Docker, the application will be preconfigured to run on **[http://localhost:8080](http://localhost:8080)**.
 
 ### Customizing Ports (Optional)
 

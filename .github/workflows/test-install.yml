@@ -72,8 +72,10 @@ jobs:
           chmod +x ./install.sh
           sudo ./install.sh
 
-      - name: Validate port 80 is listening
+      - name: Validate port is listening
         run: |
-          sudo ss -ltnp | grep ':80 ' || {
-            echo "Port 80 is not listening"; exit 1;
+          PORT=$([ "${{ matrix.engine }}" = "podman" ] && echo 8080 || echo 80)
+          sudo ss -ltnp | grep -E ":${PORT}\b" || {
+            echo "Port $PORT is not listening"
+            exit 1
           }

@@ -13,12 +13,38 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-24.04]
-        engine: [docker-v2, docker-v1, docker-pwsh, podman]
+        engine: [docker-v2-rootless, docker-v2, docker-v1, docker-pwsh, podman]
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # --- Docker Rootless ---
+      - name: Install Docker Rootless
+        if: matrix.engine == 'docker-v2-rootless'
+        run: |
+          sudo apt-get update
+          sudo apt-get install ca-certificates curl
+          sudo install -m 0755 -d /etc/apt/keyrings
+          sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+          sudo chmod a+r /etc/apt/keyrings/docker.asc
+          echo \
+            "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+            $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | \
+            sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+          sudo apt-get update
+          sudo apt-get install -y dbus-user-session uidmap systemd-container docker-ce-rootless-extras
+          sudo systemctl disable --now docker.service docker.socket
+          sudo rm /var/run/docker.sock
+          dockerd-rootless-setuptool.sh install
+          loginctl enable-linger $(whoami)
+          export XDG_RUNTIME_DIR=/run/user/$(id -u)
+          echo "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR" >> "$GITHUB_ENV"
+          echo "DOCKER_HOST=unix://$XDG_RUNTIME_DIR/docker.sock" >> "$GITHUB_ENV"
+          systemctl --user daemon-reload
+          systemctl --user start docker
+
+      # --- Docker Compose V1 ---
       - name: Install docker-compose v1 (1.27.0 binary)
         if: matrix.engine == 'docker-v1'
         run: |
@@ -59,22 +85,23 @@ jobs:
           esac
           lsof -v
 
-      # --- PWSH INSTALL (docker-pwsh only) ---
-      - name: Run install.ps1
-        if: matrix.engine == 'docker-pwsh'
+      - name: Run install script
         run: |
-          sudo apt-get update
-          sudo apt-get install -y powershell
-          sudo pwsh ./install.ps1 --no-browser --no-pause
-
-      - name: Run install.sh
-        run: |
-          chmod +x ./install.sh
-          sudo ./install.sh
+          if [ "${{ matrix.engine }}" = "docker-pwsh" ]; then
+            sudo apt-get update
+            sudo apt-get install -y powershell
+            sudo pwsh ./install.ps1 --no-browser --no-pause
+          elif [ "${{ matrix.engine }}" = "docker-v2" ] || [ "${{ matrix.engine }}" = "docker-v1" ]; then
+            chmod +x ./install.sh
+            sudo ./install.sh
+          elif [ "${{ matrix.engine }}" = "docker-v2-rootless" ] || [ "${{ matrix.engine }}" = "podman" ]; then
+            chmod +x ./install.sh
+            ./install.sh
+          fi
 
       - name: Validate port is listening
         run: |
-          PORT=$([ "${{ matrix.engine }}" = "podman" ] && echo 8080 || echo 80)
+          PORT=$([ "${{ matrix.engine }}" = "podman" ] || [ "${{ matrix.engine }}" = "docker-v2-rootless" ] && echo 8080 || echo 80)
           sudo ss -ltnp | grep -E ":${PORT}\b" || {
             echo "Port $PORT is not listening"
             exit 1

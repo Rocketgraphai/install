@@ -292,10 +292,10 @@ download_config() {
 
     # Set appropriate permissions.
     if ! chmod 600 .env >/dev/null 2>&1; then
-        log_error "Failed to set permissions on .env file."
+        log_warn "Failed to set permissions on .env file."
     fi
     if ! chmod 644 docker-compose.yml >/dev/null 2>&1; then
-        log_error "Failed to set permissions on docker-compose.yml file."
+        log_warn "Failed to set permissions on docker-compose.yml file."
     fi
 }
 
@@ -356,15 +356,16 @@ deploy_containers() {
         # Ensure volume exists
         if ! $container_tool volume inspect rocketgraph_mongodb-data >/dev/null 2>&1; then
             log_info "Creating MongoDB volume..."
-            if ! $container_tool volume create rocketgraph_mongodb-data >/dev/null 2>&1; then
+            if ! $container_tool volume create rocketgraph_mongodb-data >/dev/null; then
                 log_error "Failed to create MongoDB volume."
+                exit 1
             fi
         fi
 
         # Fix permissions on the volume for MongoDB
         log_info "Setting correct permissions on MongoDB volume..."
-        if ! $container_tool unshare chown -R 999:999 "$(podman volume inspect rocketgraph_mongodb-data -f '{{.Mountpoint}}')" >/dev/null 2>&1; then
-            log_error "Failed to set permissions on MongoDB volume."
+        if ! $container_tool unshare chown -R 999:999 "$(podman volume inspect rocketgraph_mongodb-data -f '{{.Mountpoint}}')" >/dev/null; then
+            log_warn "Failed to set permissions on MongoDB volume."
         fi
 
         # Check if there are existing containers that need to be removed
@@ -386,7 +387,7 @@ deploy_containers() {
 
     if [ "$container_tool" = "podman" ]; then
         if ! loginctl enable-linger >/dev/null 2>&1; then
-            log_error "Failed to enable linger for user sessions."
+            log_warn "Failed to enable linger for user sessions."
         fi
     fi
 

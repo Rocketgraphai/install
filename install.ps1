@@ -5,7 +5,7 @@ function Write-InfoLog { param($Message) Write-Host "[INFO] $Message" -Foregroun
 function Write-WarnLog { param($Message) Write-Host "[WARN] $Message" -ForegroundColor Yellow }
 function Write-ErrorLog { param($Message) Write-Host "[ERROR] $Message" -ForegroundColor Red }
 
-$ScriptVersion = "1.4.3"
+$ScriptVersion = "1.5.1"
 Write-InfoLog "Running Script Version $ScriptVersion"
 
 for ($i = 0; $i -lt $args.Count; $i++) {
@@ -36,7 +36,7 @@ $LICENSE_LOCATION = $DEFAULT_LICENSE_LOCATION
 $ENTERPRISE_INSTALL = $false
 
 # Minimum required Docker Compose version
-$MIN_COMPOSE_VERSION = "1.29.0"
+$MIN_COMPOSE_VERSION = "2.0.0"
 
 # Pause script if running in pop-up terminal
 $PAUSE_AT_END = $true
@@ -50,6 +50,8 @@ $INSTALL_DOCKER = $true
 $EXISTING_ENV = $false
 
 $USE_SSL = $false
+
+$ERROR_CODE = 0
 
 # Function to display help
 function Show-Help {
@@ -87,7 +89,7 @@ for ($i = 0; $i -lt $args.Count; $i++) {
                 $HTTP_PORT = $args[$i + 1]
                 $i++
             } else {
-                Write-Error "Error: Argument for --http-port is missing"
+                Write-ErrorLog "Error: Argument for --http-port is missing"
                 Read-Host "Press Enter to exit..."
                 exit 1
             }
@@ -97,7 +99,7 @@ for ($i = 0; $i -lt $args.Count; $i++) {
                 $HTTPS_PORT = $args[$i + 1]
                 $i++
             } else {
-                Write-Error "Error: Argument for --https-port is missing"
+                Write-ErrorLog "Error: Argument for --https-port is missing"
                 Read-Host "Press Enter to exit..."
                 exit 1
             }
@@ -107,7 +109,7 @@ for ($i = 0; $i -lt $args.Count; $i++) {
                 $INSTALL_DIR = $args[$i + 1]
                 $i++
             } else {
-                Write-Error "Error: Argument for --install-dir is missing"
+                Write-ErrorLog "Error: Argument for --install-dir is missing"
                 Read-Host "Press Enter to exit..."
                 exit 1
             }
@@ -117,7 +119,7 @@ for ($i = 0; $i -lt $args.Count; $i++) {
                 $LICENSE_LOCATION = $args[$i + 1]
                 $i++
             } else {
-                Write-Error "Error: Argument for --install-dir is missing"
+                Write-ErrorLog "Error: Argument for --install-dir is missing"
                 Read-Host "Press Enter to exit..."
                 exit 1
             }
@@ -127,7 +129,7 @@ for ($i = 0; $i -lt $args.Count; $i++) {
                 $XGT_PORT = $args[$i + 1]
                 $i++
             } else {
-                Write-Error "Error: Argument for --xgt-port is missing"
+                Write-ErrorLog "Error: Argument for --xgt-port is missing"
                 Read-Host "Press Enter to exit..."
                 exit 1
             }
@@ -183,7 +185,7 @@ function Get-OSPlatform {
     return "Unknown"
 }
 
-$global:isWindowsPlat = (Get-OSPlatform) -eq "Windows"
+$script:isWindowsPlat = (Get-OSPlatform) -eq "Windows"
 
 # Check if script is run as administrator
 $isAdmin = $false
@@ -229,19 +231,6 @@ function Test-Command {
     $null -ne (Get-Command $CommandName -ErrorAction SilentlyContinue)
 }
 
-# Function to check if a port is in use
-function Test-PortInUse {
-    param([int]$Port)
-    if ($isWindowsPlat) {
-        # Windows: Use Get-NetTCPConnection
-        return (Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue) -ne $null
-    } else {
-        # Linux/macOS: Use lsof
-        $result = lsof -iTCP:$Port -sTCP:LISTEN
-        return ($result -ne $null) -and ($result.Count -gt 0)
-    }
-}
-
 # Function to compare versions
 function Test-VersionGreaterOrEqual {
     param($Version1, $Version2)
@@ -249,7 +238,7 @@ function Test-VersionGreaterOrEqual {
 }
 
 function Install-Docker {
-    if ((-not (Ensure-WSL2))) {
+    if ((-not (Test-WSL2))) {
         Exit-Script 1
     }
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -259,13 +248,14 @@ function Install-Docker {
     $wc = New-Object System.Net.WebClient
     $wc.DownloadFile($url, $dockerInstaller)
     Write-InfoLog "Installing Docker Desktop (may require reboot)..."
-    Start-Process -FilePath $dockerInstaller -ArgumentList "install", "--quiet", '--accept-license' -Wait
+    Write-InfoLog "Follow the prompts in the Docker installer and close the window when it finishes by clicking X. Usually you do not need to log out or restart, even if prompted. If you do, simply rerun this setup after logging back in."
+    Start-Process -FilePath $dockerInstaller -ArgumentList "install", '--accept-license' -Wait
     # Refresh environment variables from registry
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
                 [System.Environment]::GetEnvironmentVariable("Path", "User")
 }
 
-function Is-RebootPending {
+function Test-RebootPending {
     try {
         $baseKey = [Microsoft.Win32.RegistryKey]::OpenBaseKey(
             [Microsoft.Win32.RegistryHive]::LocalMachine,
@@ -278,7 +268,7 @@ function Is-RebootPending {
     }
 }
 
-function Ensure-WSL2 {
+function Test-WSL2 {
     # Minimum Windows build for WSL2 is 19041
     if ([System.Environment]::OSVersion.Version.Build -lt 19041) {
         Write-ErrorLog "WSL2 requires Windows 10 version 2004 (build 19041) or later."
@@ -363,12 +353,11 @@ function Ensure-WSL2 {
 
     if ($needsEnable) {
         Write-ErrorLog "WSL2 features were just enabled. Please restart your system to complete installation."
-        return $false
-    }
+        if (Test-RebootPending) {
+            Write-ErrorLog "A system reboot is required to finalize the WSL2 setup."
+            Exit-Script 2
+        }
 
-    if (Is-RebootPending) {
-        Write-ErrorLog "A system reboot is required to finalize the WSL2 setup."
-        Exit-Script 2
         return $false
     }
 
@@ -378,6 +367,17 @@ function Ensure-WSL2 {
 # Check system requirements
 function Test-Requirements {
     Write-InfoLog "Checking system requirements..."
+
+    if ($isWindowsPlat) {
+        $inHyperV = Test-Path 'HKLM:\SOFTWARE\Microsoft\Virtual Machine\Guest\Parameters'
+        $inVMware = Test-Path 'HKLM:\SOFTWARE\VMware, Inc.\VMware Tools'
+        $inVBox   = Test-Path 'HKLM:\SOFTWARE\Oracle\VirtualBox Guest Additions'
+        $insideVM = $inHyperV -or $inVMware -or $inVBox
+        if ($insideVM) {
+            $script:ERROR_CODE = 3
+            Write-WarnLog "Running inside a VM is not recommended. Some features may not work as expected. Ensure nested virtualization is enabled!"
+        }
+    }
 
     # Check Docker
     if (-not (Get-Command "docker" -ErrorAction SilentlyContinue)) {
@@ -389,10 +389,6 @@ function Test-Requirements {
             Write-InfoLog "Visit https://docs.docker.com/desktop/windows/install/ for installation instructions"
             Exit-Script 1
         }
-    }
-
-    if ($isWindowsPlat -and (-not (Ensure-WSL2))) {
-        Exit-Script 1
     }
 
     # Ensure Docker is running
@@ -414,22 +410,46 @@ function Test-Requirements {
         # Wait for it to become responsive
         $maxAttempts = 60
         $attempt = 0
+        $secondsToWait = 2
         while ($attempt -lt $maxAttempts) {
-            Start-Sleep -Seconds 2
+            Start-Sleep -Seconds $secondsToWait
             & docker info > $null 2>&1
             if ($LASTEXITCODE -eq 0) {
                 Write-InfoLog "Docker is now running."
                 break
             }
             $attempt++
+            $remaining = ($maxAttempts * $secondsToWait) - ($attempt * $secondsToWait)
+            Write-Host "Waiting for Docker to start... Attempt $($attempt + 1)/$maxAttempts ($remaining seconds left)"
         }
 
         if ($LASTEXITCODE -ne 0) {
-            Write-ErrorLog "Docker failed to start or become ready within timeout."
+            Write-ErrorLog "Docker failed to start or become ready within timeout ($($maxAttempts * 2) seconds)."
+            Write-ErrorLog "Try starting Docker Desktop manually and re-run the script/installer."
             Exit-Script 1
         }
     } else {
         Write-InfoLog "Docker is already running."
+    }
+
+    if ($isWindowsPlat) {
+        try {
+            $kernel = docker info --format '{{.KernelVersion}}' 2>$null
+            Write-Verbose "KernelVersion='$kernel'"
+            if ($kernel -match 'microsoft|WSL2') 
+            { 
+                Write-InfoLog "Detected Docker is using WSL2." 
+            } elseif ($kernel -match 'linuxkit') { 
+                $script:ERROR_CODE = 4
+                Write-WarnLog "Detected Docker is using Hyper-V, please reinstall Docker with WSL2. Hyper-V is not supported. Use at your own risk!"
+            } else {
+                $script:ERROR_CODE = 5
+                Write-WarnLog "Cannot determine if Docker is using WSL2. Please ensure Docker is using WSL2."
+            }
+        } catch { 
+            $script:ERROR_CODE = 5
+            Write-WarnLog "docker info failed. Cannot determine if Docker is using WSL2. Please ensure Docker is using WSL2."
+        }
     }
 
     # Check Docker Compose version (with output suppression)
@@ -535,9 +555,8 @@ function Set-EnvVariables {
             $envContent = $envContent -replace '^XGT_AUTH_TYPES=', '#XGT_AUTH_TYPES='
         }
 
-        $USE_SSL = 0
         if ($envContent -match '^MC_SSL_PUBLIC_CERT=' -and $envContent -match '^MC_SSL_PRIVATE_KEY=') {
-            $USE_SSL = 1
+            $script:USE_SSL = $true
         }
 
         $envContent | Set-Content $envFile
@@ -562,7 +581,7 @@ function Get-ConfigurationFiles {
     try {
         Invoke-WebRequest "${downloadUrl}/env.template" -OutFile "env.template"
         if (Test-Path ".env") {
-            $EXISTING_ENV = $true
+            $script:EXISTING_ENV = $true
             $changes = $false
             Write-InfoLog "Checking for potentially new keys added to env.template since initial install."
             Write-InfoLog "This may help identify missing entries in .env, but some may be false positives."
@@ -599,21 +618,19 @@ function Get-ConfigurationFiles {
 # Pull and start containers (with output suppression)
 function Start-Containers {
     Write-InfoLog "Pulling latest container images..."
-    $pullJob = Start-Job -ScriptBlock { docker compose pull 2>$null }
-    if (-not (Wait-Job $pullJob -Timeout 300)) {
-        Write-ErrorLog "Failed to pull container images (timeout)"
+    # Run in foreground so you see streaming logs
+    docker compose pull
+    if ($LASTEXITCODE -ne 0) {
+        Write-ErrorLog "Failed to pull container images."
         Exit-Script 1
     }
-    $null = Receive-Job $pullJob
-    Remove-Job $pullJob
 
     Write-InfoLog "Starting containers..."
-    $null = docker compose up -d 2>&1 | Tee-Object -Variable dockerOutput
+    docker compose up -d
     if ($LASTEXITCODE -ne 0) {
-      Write-ErrorLog "Failed to start containers. Error: $dockerOutput"
-      Exit-Script 1
+        Write-ErrorLog "Failed to start containers."
+        Exit-Script 1
     }
-
     # Extract site-config templates from the running backend container
     $containerId = docker ps --filter "ancestor=rocketgraph/mission-control-backend:latest" --format "{{.ID}}" | Select-Object -First 1
 
@@ -684,3 +701,5 @@ try {
         Read-Host "Press Enter to exit..."
     }
 }
+
+exit $ERROR_CODE

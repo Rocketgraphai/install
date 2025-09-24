@@ -313,12 +313,12 @@ set_variables() {
 
     if grep -q '^#MC_PORT=' .env && [ "$HTTP_PORT" != "$DEFAULT_HTTP_PORT" ]; then
         log_info "Using non-standard HTTP_PORT=${HTTP_PORT}"
-        portable_sed_i "s|^#MC_PORT=${DEFAULT_HTTP_PORT}|MC_PORT=${HTTP_PORT}|" .env
+        portable_sed_i "s|^#MC_PORT=.*|MC_PORT=${HTTP_PORT}|" .env
     fi
 
     if grep -q '^#MC_SSL_PORT=' .env && [ "$HTTPS_PORT" != "$DEFAULT_HTTPS_PORT" ]; then
         log_info "Using non-standard HTTPS_PORT=${HTTPS_PORT}"
-        portable_sed_i "s|^#MC_SSL_PORT=${DEFAULT_HTTPS_PORT}|MC_SSL_PORT=${HTTPS_PORT}|" .env
+        portable_sed_i "s|^#MC_SSL_PORT=.*|MC_SSL_PORT=${HTTPS_PORT}|" .env
     fi
 
     # Determine if SSL is being used to serve Mission Control.
@@ -330,7 +330,7 @@ set_variables() {
     # Check if xgt.lic license file exists
     if [ -f xgt.lic ]; then
         log_info "Custom license file found."
-        portable_sed_i "s|^#XGT_LICENSE_FILE=/path/to/license/xgt-license.lic|XGT_LICENSE_FILE=$(pwd)/xgt.lic|" .env
+        portable_sed_i "s|^#XGT_LICENSE_FILE=.*|XGT_LICENSE_FILE=$(pwd)/xgt.lic|" .env
     fi
 
     # Comment out empty authorization list to enable multi-user auth.
@@ -346,7 +346,7 @@ deploy_containers() {
 
     if [ "$arch" = "ppc64le" ]; then
         export MC_MONGODB_IMAGE=ibmcom/mongodb-ppc64le
-        portable_sed_i 's|^#MC_MONGODB_IMAGE=mongo:latest|MC_MONGODB_IMAGE=ibmcom/mongodb-ppc64le|' .env
+        portable_sed_i 's|^#MC_MONGODB_IMAGE=.*|MC_MONGODB_IMAGE=ibmcom/mongodb-ppc64le|' .env
     fi
 
     log_info "Pulling latest container images."

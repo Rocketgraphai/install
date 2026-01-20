@@ -436,17 +436,17 @@ function Test-Requirements {
         try {
             $kernel = docker info --format '{{.KernelVersion}}' 2>$null
             Write-Verbose "KernelVersion='$kernel'"
-            if ($kernel -match 'microsoft|WSL2') 
-            { 
-                Write-InfoLog "Detected Docker is using WSL2." 
-            } elseif ($kernel -match 'linuxkit') { 
+            if ($kernel -match 'microsoft|WSL2')
+            {
+                Write-InfoLog "Detected Docker is using WSL2."
+            } elseif ($kernel -match 'linuxkit') {
                 $script:ERROR_CODE = 4
                 Write-WarnLog "Detected Docker is using Hyper-V, please reinstall Docker with WSL2. Hyper-V is not supported. Use at your own risk!"
             } else {
                 $script:ERROR_CODE = 5
                 Write-WarnLog "Cannot determine if Docker is using WSL2. Please ensure Docker is using WSL2."
             }
-        } catch { 
+        } catch {
             $script:ERROR_CODE = 5
             Write-WarnLog "docker info failed. Cannot determine if Docker is using WSL2. Please ensure Docker is using WSL2."
         }
@@ -468,7 +468,7 @@ function Test-Requirements {
 
     # Check network connectivity
     try {
-        $response = Invoke-WebRequest -Uri "https://install.rocketgraph.com" -Method Head
+        $response = Invoke-WebRequest -Uri "https://install.rocketgraph.com" -Method Head -UseBasicParsing
         if ($response.StatusCode -ne 200) {
             throw "Non-200 status code"
         }
@@ -585,13 +585,13 @@ function Get-ConfigurationFiles {
             $changes = $false
             Write-InfoLog "Checking for potentially new keys added to env.template since initial install."
             Write-InfoLog "This may help identify missing entries in .env, but some may be false positives."
-            
+
             $existing = Get-Content ".env"
             $template = Get-Content "env.template"
 
             foreach ($line in $template) {
                 if ($line -match '^\s*$|^\s*#') { continue }  # Skip empty lines and comments
-                
+
                 $key = ($line -split '=')[0]
                 if (-not ($existing -match "^$key=")) {
                     Write-WarnLog "Key '$key' is present in env.template but not found in .env. If this key is new, consider adding it:"
